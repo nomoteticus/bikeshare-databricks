@@ -6,7 +6,7 @@ SELECT
     from_utc_timestamp(TIMESTAMP(last_updated), "Europe/Zurich") as last_updated_ts,
     SIZE(data.stations) AS n_stations
 FROM STREAM read_files(
-    '/Volumes/workspace/ex3_sdp_bike/bikeflow/station_status',
+    CONCAT(:raw_path,'/station_status'),
     format => 'json')
 LATERAL VIEW EXPLODE(data.stations) AS station;
 
