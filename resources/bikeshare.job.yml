@@ -1,0 +1,31 @@
+resources:
+  jobs:
+    bikeshare_job:
+      name: bikeshare_pull_and_refresh
+      max_concurrent_runs: 1
+      timeout_seconds: 900
+
+      schedule:
+        quartz_cron_expression: "0 0/30 * * * ?"     # every 30 min (Quartz: sec min hour day month weekday)
+        timezone_id: Europe/Zurich
+
+      parameters:                         # job parameters → override the notebook widgets
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: bikeshare
+        - name: volume
+          default: raw
+
+      tasks:
+        - task_key: pull_gbfs
+          notebook_task:
+            notebook_path: ../src/ingestion/pull_gbfs.ipynb
+          max_retries: 2
+          min_retry_interval_millis: 60000
+
+        - task_key: refresh_stations
+          depends_on:
+            - task_key: pull_gbfs
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.stations_pipeline.id}

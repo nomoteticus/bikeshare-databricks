@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    stations_pipeline:                    # resource key: used by the CLI, e.g. "bundle run stations_pipeline"
+      name: bikeshare_stations            # display name in the UI
+      catalog: ${var.catalog}             # where the tables land: catalog (dev or prod)
+      schema: ${var.schema}                   # ...and schema
+      serverless: true                    # required on Free Edition
+      continuous: false                   # we want triggered, not 24/7
+      root_path: ../src/pipeline
+      libraries:
+        - glob:
+            include: ../src/pipeline/transformations/**
+      parameters:
+        raw_path: /Volumes/${var.catalog}/${var.schema}/raw
