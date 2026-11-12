@@ -144,6 +144,7 @@ CREATE OR REFRESH STREAMING TABLE silver_station_information
     CONSTRAINT valid_capacity EXPECT (capacity IS NULL OR capacity > 0)
 )
 COMMENT 'Station attributes with validity periods (__START_AT, __END_AT)';
+
 CREATE FLOW silver_station_information_flow AS AUTO CDC INTO silver_station_information
 FROM STREAM(bronze_station_information)
 KEYS (provider_id, station_id)
