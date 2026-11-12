@@ -5,8 +5,8 @@ COMMENT 'Raw station_status feed: one row per station per pulled file'
 AS
 SELECT
     station.*,
-    last_updated,
-    ttl,
+    last_updated AS feed_last_updated,
+    ttl AS feed_ttl,
     SIZE(data.stations) AS n_stations_in_file,
     _metadata.file_name AS file_name,
     _metadata.file_modification_time AS file_modification_time,
@@ -22,8 +22,8 @@ COMMENT 'Raw station_information feed: one row per station per pulled file'
 AS
 SELECT
     station.*,
-    last_updated,
-    ttl,
+    last_updated AS feed_last_updated,
+    ttl AS feed_ttl,
     _metadata.file_name AS file_name,
     _metadata.file_modification_time AS file_modification_time,
     CURRENT_TIMESTAMP() AS ingested_at
@@ -54,8 +54,8 @@ COMMENT 'Raw system_regions feed: one row per region per pulled file'
 AS
 SELECT
     region.*,
-    last_updated,
-    ttl,
+    last_updated AS feed_last_updated,
+    ttl AS feed_ttl,
     _metadata.file_name AS file_name,
     _metadata.file_modification_time AS file_modification_time,
     CURRENT_TIMESTAMP() AS ingested_at
