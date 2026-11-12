@@ -53,7 +53,6 @@ resources:
       schedule:
         quartz_cron_expression: "0 10 * * * ?"       # hourly at :10, after the :00 pull
         timezone_id: Europe/Zurich
-        pause_status: PAUSED                         # until new pipeline is ready
       tasks:
         - task_key: refresh_stations
           pipeline_task:
