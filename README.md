@@ -6,7 +6,7 @@ This is a learning project for Databricks data engineering: Lakeflow Jobs, Spark
 
 ## Goal
 
-1. **Collect** station-level bike availability snapshots and matching weather observations on a schedule.
+1. **Collect** station-level bike availability snapshots and hourly weather for the station areas (model data: recent past and short-term forecast) on a schedule.
 2. **Model** the data in bronze / silver / gold layers, with data-quality expectations.
 3. **Forecast** available bikes per station from:
    - time of day and day of week
@@ -59,7 +59,7 @@ bikeshare-databricks/
 - [x] Code in a Git folder (this repo)
 - [x] Jobs and pipeline defined as a bundle with `dev` and `prod` targets
 - [x] Running in prod on a schedule, with failure alerts
-- [ ] Weather ingestion
+- [x] Weather ingestion (Open-Meteo, daily, with backfill support)
 - [ ] Gold table: station × hour availability + weather
 - [ ] Forecasting model and evaluation
 - [ ] CI: `databricks bundle validate` on every pull request (GitHub Actions)
