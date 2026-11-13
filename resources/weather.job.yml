@@ -1,0 +1,30 @@
+resources:
+  jobs:
+    weather_job:
+      name: bikeshare_pull_weather
+      max_concurrent_runs: 1
+      timeout_seconds: 600
+      schedule:
+        quartz_cron_expression: "0 20 5 * * ?"     # daily at 05:20 (sec min hour day month weekday)
+        timezone_id: Europe/Zurich
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: volume
+          default: raw
+        - name: run_date
+          default: "{{job.trigger.time.iso_datetime}}"   # backfill overrides with {{backfill.iso_datetime}}
+        - name: lookback_days
+          default: "2"
+        - name: forecast_days
+          default: "3"
+        - name: locations
+          default: all
+      tasks:
+        - task_key: pull_weather
+          notebook_task:
+            notebook_path: ../src/ingestion/pull_weather.ipynb
+          max_retries: 2
+          min_retry_interval_millis: 60000

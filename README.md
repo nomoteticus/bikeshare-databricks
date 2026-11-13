@@ -18,7 +18,7 @@ This is a learning project for Databricks data engineering: Lakeflow Jobs, Spark
 | Source | What | Format |
 |---|---|---|
 | [sharedmobility.ch](https://sharedmobility.ch) | Swiss shared-mobility feeds: station information and station status (bikes and docks available) | GBFS (JSON) |
-| Weather API (to be chosen: MeteoSwiss open data or Open-Meteo) | Hourly observations near the stations | JSON / CSV |
+| [Open-Meteo](https://open-meteo.com) (MeteoSwiss ICON-CH1/CH2 models, CC BY 4.0) | Hourly weather (temperature, precipitation, snowfall, wind, clouds, sunshine) for 0.1° grid cells around the bike stations: past 2 days and next 2 days, pulled daily; backfills via the Historical Forecast API | JSON |
 
 ## Architecture
 
@@ -43,9 +43,9 @@ bikeshare-databricks/
 ├─ databricks.yml        # bundle config: targets (dev / prod), variables
 ├─ resources/            # job and pipeline definitions (YAML)
 ├─ src/
-│  ├─ ingestion/         # notebook that pulls the GBFS feeds (weather planned)
+│  ├─ ingestion/         # notebooks that pull the GBFS feeds and the weather
 │  ├─ pipeline/
-│  │  ├─ transformations/  # pipeline code: bronze and silver (gold planned)
+│  │  ├─ transformations/  # pipeline code: reference, bronze and silver (gold planned)
 │  │  └─ explorations/     # reusable data-check queries, not run by the pipeline
 │  └─ forecasting/       # planned
 ├─ docs/                 # project context and working notes
