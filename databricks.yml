@@ -45,3 +45,8 @@ targets:
             on_failure:
               - ${workspace.current_user.userName}
             no_alert_for_skipped_runs: true
+        weather_job:
+          email_notifications:
+            on_failure:
+              - ${workspace.current_user.userName}
+            no_alert_for_skipped_runs: true
