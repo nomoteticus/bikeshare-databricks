@@ -38,6 +38,8 @@ GROUP BY location_id, cell_lat, cell_lon;
 
 -- Bronze: raw Open-Meteo pulls, one row per location per hour per pulled file. No conversions.
 
+-- Explicit schema: lets the pipeline start on an empty raw/weather folder (prod incident 13 Nov 2026).
+-- When adding a weather variable, add it here as well as in pull_weather.ipynb.
 CREATE OR REFRESH STREAMING TABLE bronze_weather
 COMMENT 'Raw Open-Meteo pulls: one row per location per hour per pulled file'
 AS
@@ -66,7 +68,29 @@ SELECT
     CURRENT_TIMESTAMP()              AS ingested_at
 FROM STREAM read_files(
     CONCAT(:raw_path, '/weather'),
-    format => 'json')
+    format => 'json',
+    schema => '
+    location_id STRING,
+    requested_lat DOUBLE,
+    requested_lon DOUBLE,
+    latitude DOUBLE,
+    longitude DOUBLE,
+    elevation DOUBLE,
+    model STRING,
+    run_date STRING,
+    pulled_at STRING,
+    hourly STRUCT<
+        time: ARRAY<BIGINT>,
+        temperature_2m: ARRAY<DOUBLE>,
+        relative_humidity_2m: ARRAY<BIGINT>,
+        precipitation: ARRAY<DOUBLE>,
+        snowfall: ARRAY<DOUBLE>,
+        weather_code: ARRAY<BIGINT>,
+        cloud_cover: ARRAY<BIGINT>,
+        wind_speed_10m: ARRAY<DOUBLE>,
+        wind_gusts_10m: ARRAY<DOUBLE>,
+        sunshine_duration: ARRAY<DOUBLE>
+    >')   
 LATERAL VIEW POSEXPLODE(hourly.time) AS pos, time;
 
 
