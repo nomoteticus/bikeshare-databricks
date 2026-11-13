@@ -1,4 +1,5 @@
 .databricks/
 .claudine/
-explorations/
-reports/
+/explorations/
+/reports/
+/claude/
