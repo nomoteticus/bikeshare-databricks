@@ -43,18 +43,22 @@ bikeshare-databricks/
 ├─ databricks.yml        # bundle config: targets (dev / prod), variables
 ├─ resources/            # job and pipeline definitions (YAML)
 ├─ src/
-│  ├─ ingestion/         # notebooks that pull GBFS and weather data
-│  ├─ pipeline/          # Spark Declarative Pipeline source (bronze/silver/gold)
+│  ├─ ingestion/         # notebook that pulls the GBFS feeds (weather planned)
+│  ├─ pipeline/
+│  │  ├─ transformations/  # pipeline code: bronze and silver (gold planned)
+│  │  └─ explorations/     # reusable data-check queries, not run by the pipeline
 │  └─ forecasting/       # planned
+├─ docs/                 # project context and working notes
 └─ README.md
 ```
 
 ## Status
 
-- [x] GBFS ingestion notebook and scheduled Lakeflow Job
-- [x] Spark Declarative Pipeline with bronze / silver / gold tables and expectations
-- [ ] Code in a Git folder (this repo)
-- [ ] Job and pipeline defined as a Declarative Automation Bundle with `dev` and `prod` targets
+- [x] GBFS ingestion notebook and scheduled Lakeflow Jobs
+- [x] Spark Declarative Pipeline: bronze and silver tables with expectations, SCD type 2 station history
+- [x] Code in a Git folder (this repo)
+- [x] Jobs and pipeline defined as a bundle with `dev` and `prod` targets
+- [x] Running in prod on a schedule, with failure alerts
 - [ ] Weather ingestion
 - [ ] Gold table: station × hour availability + weather
 - [ ] Forecasting model and evaluation
