@@ -45,7 +45,7 @@ bikeshare-databricks/
 ├─ src/
 │  ├─ ingestion/         # notebooks that pull the GBFS feeds and the weather
 │  ├─ pipeline/
-│  │  ├─ transformations/  # pipeline code: reference, bronze and silver (gold planned)
+│  │  ├─ transformations/  # pipeline code: reference, bronze, silver and gold
 │  │  └─ explorations/     # reusable data-check queries, not run by the pipeline
 │  └─ forecasting/       # planned
 ├─ docs/                 # project context and working notes
@@ -60,7 +60,8 @@ bikeshare-databricks/
 - [x] Jobs and pipeline defined as a bundle with `dev` and `prod` targets
 - [x] Running in prod on a schedule, with failure alerts
 - [x] Weather ingestion (Open-Meteo, daily, with backfill support)
-- [ ] Gold table: station × hour availability + weather
+- [x] Gold table: station × hour availability + weather (in prod since 14 Nov 2026)
+- [ ] Gold features: calendar (holidays, school vacations) and lag features
 - [ ] Forecasting model and evaluation
 - [ ] CI: `databricks bundle validate` on every pull request (GitHub Actions)
 
