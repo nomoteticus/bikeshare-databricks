@@ -47,8 +47,12 @@ STATION TO CITY: from silver_station_city (rule documented there).
 DATA STATUS (first matching rule wins):
     glitch_known      the hour lies in a confirmed incident of a provider present in the city (ref_data_incidents)
     glitch_suspected  AUTOMATIC RULE: the provider's NATIONAL total of docked bikes at the hour start is below 80% of
-                       its maximum within +/-12 hours. Normal commute dips are 2 to 6% of a fleet, so 80% only trips on
-                       feed faults (18 Nov 2026: 63%). Evaluated on all stations of the provider, not only the city.
+                       its maximum within +/-12 hours AND at least 200 bikes below it. Evaluated on all stations of
+                       the provider, not only the city. The 80% part separates feed faults from commuting in large
+                       fleets (commute dips 2 to 6%; Velospot fault 18 Nov 2026: 63%, about 2,800 bikes). The 200-bike
+                       part was added 19 Nov 2026 after false positives in Yverdon (one-city fleet of about 130 bikes,
+                       normal 08:00 commute dips of 25 to 33 bikes = up to 26%). Faults in small fleets are therefore not
+                       detected automatically; confirmed ones go into ref_data_incidents.
      missing           no snapshot for the city in that hour (pull failed or not yet arrived)
      partial           fewer than 90% of the city's stations reported in that hour
      ok                none of the above
@@ -164,7 +168,8 @@ provider_suspect AS (                                         -- automatic glitc
                                    ROWS BETWEEN 12 PRECEDING AND 12 FOLLOWING) AS total_max_24h
         FROM provider_totals
     )
-    WHERE total_bikes < 0.8 * total_max_24h
+    WHERE total_bikes < 0.8 * total_max_24h                   -- relative drop of more than 20% ...
+      AND total_max_24h - total_bikes >= 200                   -- ... and at least 200 bikes (small fleets: see header)
 ),
 city_known_glitch AS (
     SELECT DISTINCT cp.city_id, sp.hour_ts
