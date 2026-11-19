@@ -61,9 +61,13 @@ bikeshare-databricks/
 - [x] Jobs and pipeline defined as a bundle with `dev` and `prod` targets
 - [x] Running in prod on a schedule, with failure alerts
 - [x] Weather ingestion (Open-Meteo, daily, with backfill support)
+<<<<<<< Updated upstream
 - [x] Gold table: station × hour availability + weather (in prod since 14 Nov 2026)
 - [ ] Gold table: city × hour for 12 Swiss cities (docked bikes, data-quality status, estimated bikes out, weather, sunrise/sunset), feeding a daily animation
 - [ ] Gold features: calendar (holidays, school vacations) and lag features
+=======
+- [ ] Gold table: station × hour availability + weather
+>>>>>>> Stashed changes
 - [ ] Forecasting model and evaluation
 - [ ] CI: `databricks bundle validate` on every pull request (GitHub Actions)
 
