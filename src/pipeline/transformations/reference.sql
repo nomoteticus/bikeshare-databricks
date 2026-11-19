@@ -43,7 +43,8 @@ FROM VALUES
   ('lugano',    'Lugano',                 'TI', 46.005, 8.950,  6.0, '46.0_9.0'),
   ('fribourg',  'Fribourg',               'FR', 46.802, 7.152,  5.0, '46.8_7.1'),
   ('biel',      'Biel/Bienne',            'BE', 47.137, 7.250,  5.0, '47.1_7.3'),
-  ('neuchatel', 'Neuchâtel',              'NE', 46.992, 6.931,  6.0, '47.0_6.9')
+  ('neuchatel', 'Neuchâtel',              'NE', 46.992, 6.931,  6.0, '47.0_6.9'),
+  ('chur',      'Chur',                   'GR', 46.853, 9.529,  6.0, '46.9_9.5')    -- added 19 Nov 2026; keep only if 50+ stations
 AS t(city_id, city_name, canton, center_lat, center_lon, radius_km, weather_location_id);
 
 
