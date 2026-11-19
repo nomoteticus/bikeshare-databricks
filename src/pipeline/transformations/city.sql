@@ -1,9 +1,48 @@
 /*
+Station to city: one row per current docked-bike station that lies in a city of ref_cities. Single definition of the
+city mapping, reused by gold_city_hour and gold_station_hour_features.
+
+RULE: a station belongs to the NEAREST city whose radius_km contains it (haversine distance to the city center,
+earth radius 6,371 km). Stations outside every radius are not listed. Uses current station positions
+(silver_station_weather_location), like the weather-cell mapping; stations rarely move, so no history is kept.
+*/
+
+CREATE OR REFRESH MATERIALIZED VIEW silver_station_city (
+  provider_id                 STRING COMMENT 'Provider of the station',
+  station_id                  STRING COMMENT 'Station id as in the feed (<system>:<id>)',
+  city_id                     STRING COMMENT 'City key, see ref_cities',
+  distance_to_city_center_km  DOUBLE COMMENT 'Great-circle distance from the station to the city center, km'
+)
+COMMENT 'Current docked-bike stations mapped to the nearest city of ref_cities within its radius'
+AS
+WITH station_city_distance AS (
+    SELECT
+        s.provider_id,
+        s.station_id,
+        c.city_id,
+        c.radius_km,
+        2 * 6371 * ASIN(SQRT(
+              POWER(SIN(RADIANS(s.lat - c.center_lat) / 2), 2)
+            + COS(RADIANS(c.center_lat)) * COS(RADIANS(s.lat)) * POWER(SIN(RADIANS(s.lon - c.center_lon) / 2), 2)
+        )) AS distance_km
+    FROM silver_station_weather_location AS s
+    CROSS JOIN ref_cities AS c
+)
+SELECT
+    provider_id,
+    station_id,
+    city_id,
+    CAST(ROUND(distance_km, 3) AS DOUBLE) AS distance_to_city_center_km
+FROM station_city_distance
+WHERE distance_km <= radius_km
+QUALIFY ROW_NUMBER() OVER (PARTITION BY provider_id, station_id ORDER BY distance_km) = 1;
+
+
+/*
 Gold: one row per city (ref_cities) and UTC hour, on a complete hour spine (missing hours still get a row).
 Semantic layer for the daily animation and candidate city-level features. All business rules live here:
 
-STATION TO CITY: current docked-bike stations (silver_station_weather_location) are assigned to the NEAREST city in
-ref_cities whose radius_km they fall in (haversine distance to the city center). Uses current station positions.
+STATION TO CITY: from silver_station_city (rule documented there).
 
 DATA STATUS (first matching rule wins):
     glitch_known      the hour lies in a confirmed incident of a provider present in the city (ref_data_incidents)
@@ -26,9 +65,7 @@ in two days. The last 12 hours are provisional: their baseline can still rise wh
 WEATHER: from the city's weather cell (ref_cities.weather_location_id). Instant values at the hour start; precipitation
 and snowfall summed DURING the hour (silver_weather row stamped hour_ts + 1 hour, as in gold_station_hour_features).
 
-SUN: NOAA general solar position formulas (accuracy about 1 to 2 minutes), at the city center. Elevation at the hour
-start; sunrise and sunset for the local date, with the standard -0.833 degree horizon (refraction + solar disc).
-light_phase: day (elevation > -0.833), twilight (civil, down to -6), night (below -6).
+SUN: from silver_sun_location_hour (calendar.sql) for the city's weather cell (rules documented there).
 
 Local time: Europe/Zurich, stored as TIMESTAMP holding the wall-clock time.
 
@@ -64,8 +101,8 @@ CREATE OR REFRESH MATERIALIZED VIEW gold_city_hour (
   cloud_cover_pct          DOUBLE    COMMENT 'Cloud cover at the hour start, percent',
   weather_code             INT       COMMENT 'WMO weather code at the hour start',
   weather_is_forecast      BOOLEAN   COMMENT 'TRUE when the weather values are still a forecast (after the latest weather pull)',
-  sunrise_local            TIMESTAMP COMMENT 'Sunrise on date_local at the city center, Europe/Zurich wall-clock time',
-  sunset_local             TIMESTAMP COMMENT 'Sunset on date_local at the city center, Europe/Zurich wall-clock time',
+  sunrise_local            TIMESTAMP COMMENT 'Sunrise on date_local for the city weather cell, Europe/Zurich wall-clock time',
+  sunset_local             TIMESTAMP COMMENT 'Sunset on date_local for the city weather cell, Europe/Zurich wall-clock time',
   daylight_hours           DOUBLE    COMMENT 'Hours between sunrise and sunset on date_local',
   sun_elevation_deg        DOUBLE    COMMENT 'Sun elevation above the horizon at the hour start, degrees (negative = below)',
   light_phase              STRING    COMMENT 'day (elevation > -0.833), twilight (to -6) or night, at the hour start',
@@ -80,30 +117,14 @@ WITH hour_spine AS (                                          -- every UTC hour 
     SELECT EXPLODE(SEQUENCE(first_hour_ts, last_hour_ts, INTERVAL 1 HOUR)) AS hour_ts
     FROM (SELECT MIN(hour_ts) AS first_hour_ts, MAX(hour_ts) AS last_hour_ts FROM gold_station_hour)
 ),
-station_city AS (                                             -- nearest city whose radius contains the station
-    SELECT
-        s.provider_id,
-        s.station_id,
-        c.city_id
-    FROM silver_station_weather_location AS s
-    CROSS JOIN ref_cities AS c
-    WHERE 2 * 6371 * ASIN(SQRT(
-              POWER(SIN(RADIANS(s.lat - c.center_lat) / 2), 2)
-            + COS(RADIANS(c.center_lat)) * COS(RADIANS(s.lat)) * POWER(SIN(RADIANS(s.lon - c.center_lon) / 2), 2)
-          )) <= c.radius_km
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY s.provider_id, s.station_id
-        ORDER BY POWER(s.lat - c.center_lat, 2) + POWER((s.lon - c.center_lon) * COS(RADIANS(c.center_lat)), 2)
-    ) = 1
-),
 city_size AS (
     SELECT city_id, COUNT(*) AS n_stations_city
-    FROM station_city
+    FROM silver_station_city
     GROUP BY city_id
 ),
 city_providers AS (
     SELECT DISTINCT city_id, provider_id
-    FROM station_city
+    FROM silver_station_city
 ),
 city_observed AS (                                            -- observed hours only
     SELECT
@@ -112,7 +133,7 @@ city_observed AS (                                            -- observed hours 
         COUNT(*)                   AS n_stations_reporting,
         SUM(h.bikes_at_hour_start) AS docked_bikes_raw
     FROM gold_station_hour AS h
-    JOIN station_city AS sc
+    JOIN silver_station_city AS sc
         ON  h.provider_id = sc.provider_id
         AND h.station_id  = sc.station_id
     GROUP BY sc.city_id, h.hour_ts
@@ -164,8 +185,6 @@ city_hour_status AS (
     SELECT
         c.city_id,
         c.city_name,
-        c.center_lat,
-        c.center_lon,
         c.weather_location_id,
         sp.hour_ts,
         cs.n_stations_city,
@@ -236,43 +255,12 @@ city_hour_out_scaled AS (
             OVER (PARTITION BY city_id) AS bikes_out_peak_recent_7d
     FROM city_hour_out
 ),
-sun_inputs AS (                                               -- NOAA fractional-year angle, for the hour and for local noon
+city_hour_local AS (
     SELECT
         *,
-        FROM_UTC_TIMESTAMP(hour_ts, 'Europe/Zurich')                                         AS hour_local_ts,
-        TO_DATE(FROM_UTC_TIMESTAMP(hour_ts, 'Europe/Zurich'))                                AS date_local,
-        2 * PI() / 365 * (DAYOFYEAR(hour_ts) - 1 + (HOUR(hour_ts) - 12) / 24.0)             AS g_hour,
-        2 * PI() / 365 * (DAYOFYEAR(TO_DATE(FROM_UTC_TIMESTAMP(hour_ts, 'Europe/Zurich'))) - 1) AS g_noon
+        FROM_UTC_TIMESTAMP(hour_ts, 'Europe/Zurich')          AS hour_local_ts,
+        TO_DATE(FROM_UTC_TIMESTAMP(hour_ts, 'Europe/Zurich')) AS date_local
     FROM city_hour_out_scaled
-),
-sun_terms AS (                                                -- equation of time (minutes) and declination (radians)
-    SELECT
-        *,
-        229.18 * (0.000075 + 0.001868 * COS(g_hour) - 0.032077 * SIN(g_hour)
-                  - 0.014615 * COS(2 * g_hour) - 0.040849 * SIN(2 * g_hour))                AS eqtime_hour,
-        0.006918 - 0.399912 * COS(g_hour) + 0.070257 * SIN(g_hour) - 0.006758 * COS(2 * g_hour)
-            + 0.000907 * SIN(2 * g_hour) - 0.002697 * COS(3 * g_hour) + 0.00148 * SIN(3 * g_hour) AS decl_hour,
-        229.18 * (0.000075 + 0.001868 * COS(g_noon) - 0.032077 * SIN(g_noon)
-                  - 0.014615 * COS(2 * g_noon) - 0.040849 * SIN(2 * g_noon))                AS eqtime_noon,
-        0.006918 - 0.399912 * COS(g_noon) + 0.070257 * SIN(g_noon) - 0.006758 * COS(2 * g_noon)
-            + 0.000907 * SIN(2 * g_noon) - 0.002697 * COS(3 * g_noon) + 0.00148 * SIN(3 * g_noon) AS decl_noon
-    FROM sun_inputs
-),
-sun AS (
-    SELECT
-        *,
-        -- hour angle (degrees) from true solar time in minutes (UTC hour start + longitude + equation of time)
-        DEGREES(ASIN(
-              SIN(RADIANS(center_lat)) * SIN(decl_hour)
-            + COS(RADIANS(center_lat)) * COS(decl_hour)
-              * COS(RADIANS((HOUR(hour_ts) * 60 + eqtime_hour + 4 * center_lon) / 4 - 180))
-        )) AS sun_elevation_deg,
-        -- sunrise/sunset hour angle (degrees) for the -0.833 degree horizon
-        DEGREES(ACOS(
-              COS(RADIANS(90.833)) / (COS(RADIANS(center_lat)) * COS(decl_noon))
-            - TAN(RADIANS(center_lat)) * TAN(decl_noon)
-        )) AS ha_sunrise_deg
-    FROM sun_terms
 )
 SELECT
     s.city_id,
@@ -305,23 +293,18 @@ SELECT
     CAST(w.cloud_cover AS DOUBLE)                                       AS cloud_cover_pct,
     CAST(w.weather_code AS INT)                                         AS weather_code,
     w.is_forecast                                                       AS weather_is_forecast,
-    FROM_UTC_TIMESTAMP(TIMESTAMPADD(SECOND,
-        CAST(ROUND((720 - 4 * (s.center_lon + s.ha_sunrise_deg) - s.eqtime_noon) * 60) AS INT),
-        CAST(s.date_local AS TIMESTAMP)), 'Europe/Zurich')              AS sunrise_local,
-    FROM_UTC_TIMESTAMP(TIMESTAMPADD(SECOND,
-        CAST(ROUND((720 - 4 * (s.center_lon - s.ha_sunrise_deg) - s.eqtime_noon) * 60) AS INT),
-        CAST(s.date_local AS TIMESTAMP)), 'Europe/Zurich')              AS sunset_local,
-    CAST(8 * s.ha_sunrise_deg / 60 AS DOUBLE)                           AS daylight_hours,   -- 2 * 4 min per degree
-    CAST(ROUND(s.sun_elevation_deg, 2) AS DOUBLE)                       AS sun_elevation_deg,
-    CASE
-        WHEN s.sun_elevation_deg > -0.833 THEN 'day'
-        WHEN s.sun_elevation_deg > -6     THEN 'twilight'
-        ELSE 'night'
-    END                                                                 AS light_phase
-FROM sun AS s
+    sun.sunrise_local,
+    sun.sunset_local,
+    sun.daylight_hours,
+    sun.sun_elevation_deg,
+    sun.light_phase
+FROM city_hour_local AS s
 LEFT JOIN silver_weather AS w                                 -- instant values at the hour start
     ON  w.location_id = s.weather_location_id
     AND w.valid_ts    = s.hour_ts
 LEFT JOIN silver_weather AS w_next                            -- sums during the hour
     ON  w_next.location_id = s.weather_location_id
-    AND w_next.valid_ts    = s.hour_ts + INTERVAL 1 HOUR;
+    AND w_next.valid_ts    = s.hour_ts + INTERVAL 1 HOUR
+LEFT JOIN silver_sun_location_hour AS sun                     -- sun of the city's weather cell
+    ON  sun.location_id = s.weather_location_id
+    AND sun.hour_ts     = s.hour_ts;

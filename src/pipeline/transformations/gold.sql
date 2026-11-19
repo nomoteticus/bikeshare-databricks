@@ -80,11 +80,26 @@ SELECT
     w_next.snowfall            AS snowfall_in_hour,
     w_next.sunshine_duration   AS sunshine_in_hour,
     w_next.wind_gusts_10m      AS wind_gusts_in_hour,
-    w.is_forecast              AS weather_is_forecast
+    w.is_forecast              AS weather_is_forecast,
+    -- city (silver_station_city; NULL for stations outside every city radius)
+    sc.city_id,
+    sc.distance_to_city_center_km,
+    -- sun of the station's weather cell at the hour start (silver_sun_location_hour, calendar.sql)
+    sun.sun_elevation_deg,
+    sun.light_phase,
+    sun.daylight_hours,
+    sun.sunrise_local,
+    sun.sunset_local
 FROM station_hour AS sh
 LEFT JOIN silver_weather AS w                                 -- keep bike rows even without weather
     ON  sh.location_id = w.location_id
     AND w.valid_ts = sh.hour_ts
 LEFT JOIN silver_weather AS w_next
     ON  sh.location_id = w_next.location_id
-    AND w_next.valid_ts = sh.hour_ts + INTERVAL 1 HOUR;
+    AND w_next.valid_ts = sh.hour_ts + INTERVAL 1 HOUR
+LEFT JOIN silver_station_city AS sc                           -- keep stations outside every city
+    ON  sh.provider_id = sc.provider_id
+    AND sh.station_id  = sc.station_id
+LEFT JOIN silver_sun_location_hour AS sun
+    ON  sun.location_id = sh.location_id
+    AND sun.hour_ts     = sh.hour_ts;
