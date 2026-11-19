@@ -1,39 +1,41 @@
--- Gold: one row per city (ref_cities) and UTC hour, on a complete hour spine (missing hours still get a row).
--- Semantic layer for the daily animation and candidate city-level features. All business rules live here:
---
--- STATION TO CITY: current docked-bike stations (silver_station_weather_location) are assigned to the NEAREST city in
---   ref_cities whose radius_km they fall in (haversine distance to the city center). Uses current station positions.
---
--- DATA STATUS (first matching rule wins):
---   glitch_known      the hour lies in a confirmed incident of a provider present in the city (ref_data_incidents)
---   glitch_suspected  AUTOMATIC RULE: the provider's NATIONAL total of docked bikes at the hour start is below 80% of
---                     its maximum within +/-12 hours. Normal commute dips are 2 to 6% of a fleet, so 80% only trips on
---                     feed faults (18 Nov 2026: 63%). Evaluated on all stations of the provider, not only the city.
---   missing           no snapshot for the city in that hour (pull failed or not yet arrived)
---   partial           fewer than 90% of the city's stations reported in that hour
---   ok                none of the above
---
--- CLEANED COUNT: docked_bikes = docked_bikes_raw when ok; otherwise linear interpolation in time between the nearest
---   ok hours before and after (or the nearest ok hour at the edges); is_imputed marks those rows.
---
--- BIKES OUT (estimate, for display; NOT usable as a forecasting feature because it uses future hours):
---   fleet_baseline_bikes = max of docked_bikes within +/-12 hours (rows 12 PRECEDING to 12 FOLLOWING; exact because
---   the spine has no gaps). bikes_out_est = fleet_baseline_bikes - docked_bikes. The rolling baseline absorbs slow
---   fleet changes (repairs, operator moves); found 19 Nov 2026 in Zurich, where docked bikes at night fell about 65
---   in two days. The last 12 hours are provisional: their baseline can still rise when new hours arrive.
---
--- WEATHER: from the city's weather cell (ref_cities.weather_location_id). Instant values at the hour start; precipitation
---   and snowfall summed DURING the hour (silver_weather row stamped hour_ts + 1 hour, as in gold_station_hour_features).
---
--- SUN: NOAA general solar position formulas (accuracy about 1 to 2 minutes), at the city center. Elevation at the hour
---   start; sunrise and sunset for the local date, with the standard -0.833 degree horizon (refraction + solar disc).
---   light_phase: day (elevation > -0.833), twilight (civil, down to -6), night (below -6).
---
--- Local time: Europe/Zurich, stored as TIMESTAMP holding the wall-clock time.
---
--- Refresh: this view has expectations and unbounded windows, so every pipeline update recomputes it fully. That is
--- intended: the table is small (12 cities x 24 hours a day), and a full recompute also re-evaluates the +/-12 h
--- baseline, the interpolation and the 7-day peak whenever new hours arrive.
+/*
+Gold: one row per city (ref_cities) and UTC hour, on a complete hour spine (missing hours still get a row).
+Semantic layer for the daily animation and candidate city-level features. All business rules live here:
+
+STATION TO CITY: current docked-bike stations (silver_station_weather_location) are assigned to the NEAREST city in
+ref_cities whose radius_km they fall in (haversine distance to the city center). Uses current station positions.
+
+DATA STATUS (first matching rule wins):
+    glitch_known      the hour lies in a confirmed incident of a provider present in the city (ref_data_incidents)
+    glitch_suspected  AUTOMATIC RULE: the provider's NATIONAL total of docked bikes at the hour start is below 80% of
+                       its maximum within +/-12 hours. Normal commute dips are 2 to 6% of a fleet, so 80% only trips on
+                       feed faults (18 Nov 2026: 63%). Evaluated on all stations of the provider, not only the city.
+     missing           no snapshot for the city in that hour (pull failed or not yet arrived)
+     partial           fewer than 90% of the city's stations reported in that hour
+     ok                none of the above
+
+CLEANED COUNT: docked_bikes = docked_bikes_raw when ok; otherwise linear interpolation in time between the nearest
+ok hours before and after (or the nearest ok hour at the edges); is_imputed marks those rows.
+
+BIKES OUT (estimate, for display; NOT usable as a forecasting feature because it uses future hours):
+fleet_baseline_bikes = max of docked_bikes within +/-12 hours (rows 12 PRECEDING to 12 FOLLOWING; exact because
+the spine has no gaps). bikes_out_est = fleet_baseline_bikes - docked_bikes. The rolling baseline absorbs slow
+fleet changes (repairs, operator moves); found 19 Nov 2026 in Zurich, where docked bikes at night fell about 65
+in two days. The last 12 hours are provisional: their baseline can still rise when new hours arrive.
+
+WEATHER: from the city's weather cell (ref_cities.weather_location_id). Instant values at the hour start; precipitation
+and snowfall summed DURING the hour (silver_weather row stamped hour_ts + 1 hour, as in gold_station_hour_features).
+
+SUN: NOAA general solar position formulas (accuracy about 1 to 2 minutes), at the city center. Elevation at the hour
+start; sunrise and sunset for the local date, with the standard -0.833 degree horizon (refraction + solar disc).
+light_phase: day (elevation > -0.833), twilight (civil, down to -6), night (below -6).
+
+Local time: Europe/Zurich, stored as TIMESTAMP holding the wall-clock time.
+
+Refresh: this view has expectations and unbounded windows, so every pipeline update recomputes it fully. That is
+intended: the table is small (12 cities x 24 hours a day), and a full recompute also re-evaluates the +/-12 h
+baseline, the interpolation and the 7-day peak whenever new hours arrive.
+*/
 
 CREATE OR REFRESH MATERIALIZED VIEW gold_city_hour (
   city_id                  STRING    COMMENT 'City key, see ref_cities',
