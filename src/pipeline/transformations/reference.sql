@@ -13,3 +13,61 @@ FROM VALUES
   ('nextbike_ms',               'partial'),
   ('nextbike_ch',               'none')
 AS t(provider_id, capacity_coverage);   -- 'full' / 'partial' / 'none'
+
+/*
+Cities for city-level aggregates (gold_city_hour) and the daily animation.
+Rule for being listed: 45+ current docked-bike stations within radius_km of the center (threshold set 19 Nov 2026,
+lowered from 50 to keep Chur at 48; others below 45 then: Bellinzona about 42, Sursee 41, Thun 40).
+Radius rule: radius_km covers the city and the directly adjoining places of the same operator network
+(e.g. Bern with Koeniz and Ittigen); chosen by hand per city from the station positions, not one global value.
+Station-to-city rule (in city.sql): a station belongs to the NEAREST listed city whose radius it falls in;
+stations outside every radius belong to no city.
+canton = canton of the main municipality (stations of an agglomeration can lie in a neighboring canton).
+weather_location_id = the weather grid cell (see silver_weather_locations) used for the whole city.
+*/
+CREATE OR REFRESH MATERIALIZED VIEW ref_cities
+COMMENT "Cities with 45+ docked-bike stations: center, radius for the station-to-city mapping, canton, weather cell"
+AS
+SELECT
+  city_id,
+  city_name,
+  canton,
+  CAST(center_lat AS DOUBLE) AS center_lat,
+  CAST(center_lon AS DOUBLE) AS center_lon,
+  CAST(radius_km  AS DOUBLE) AS radius_km,
+  weather_location_id
+FROM VALUES
+  ('geneve',    'Genève',                 'GE', 46.204, 6.143,  7.0, '46.2_6.1'),
+  ('bern',      'Bern',                   'BE', 46.948, 7.447, 10.0, '46.9_7.4'),
+  ('basel',     'Basel',                  'BS', 47.557, 7.590,  5.0, '47.6_7.6'),
+  ('zurich',    'Zürich',                 'ZH', 47.378, 8.540,  6.0, '47.4_8.5'),
+  ('luzern',    'Luzern',                 'LU', 47.050, 8.309,  7.0, '47.0_8.3'),
+  ('locarno',   'Locarno',                'TI', 46.170, 8.795,  8.0, '46.2_8.8'),
+  ('sion',      'Sion',                   'VS', 46.233, 7.360,  6.0, '46.2_7.4'),   -- Sion + Saviese; Grone (13 km) left out
+  ('yverdon',   'Yverdon-les-Bains',      'VD', 46.778, 6.641,  4.0, '46.8_6.6'),
+  ('lugano',    'Lugano',                 'TI', 46.005, 8.950,  6.0, '46.0_9.0'),
+  ('fribourg',  'Fribourg',               'FR', 46.802, 7.152,  5.0, '46.8_7.1'),
+  ('biel',      'Biel/Bienne',            'BE', 47.137, 7.250,  5.0, '47.1_7.3'),
+  ('neuchatel', 'Neuchâtel',              'NE', 46.992, 6.931,  6.0, '47.0_6.9'),
+  ('chur',      'Chur',                   'GR', 46.853, 9.529,  6.0, '46.9_9.5')    -- 48 stations (19 Nov 2026)
+AS t(city_id, city_name, canton, center_lat, center_lon, radius_km, weather_location_id);
+
+
+/*
+Confirmed data incidents, entered by hand after investigation. Times are UTC, [start_ts, end_ts) (end exclusive),
+on the hour grain of gold (hour_ts). gold_city_hour marks every hour of an affected provider as 'glitch_known'.
+An automatic rule in city.sql also flags SUSPECTED glitches; confirmed ones are added here.
+*/
+CREATE OR REFRESH MATERIALIZED VIEW ref_data_incidents
+COMMENT "Confirmed data incidents per provider (UTC, end exclusive), used to flag affected hours in gold"
+AS
+SELECT
+  provider_id,
+  CAST(start_ts AS TIMESTAMP) AS start_ts,
+  CAST(end_ts   AS TIMESTAMP) AS end_ts,
+  incident_type,
+  note
+FROM VALUES
+  ('velospot', '2026-11-18 07:00:00', '2026-11-18 11:00:00', 'wrong_counts',
+   'Nationwide: about 2,800 of 7,800 bikes (37%) missing 08:00 to 11:59 Zurich time, abrupt recovery at 12:00; stations kept reporting fresh values; cause unknown (investigated 19 Nov 2026)')
+AS t(provider_id, start_ts, end_ts, incident_type, note);
