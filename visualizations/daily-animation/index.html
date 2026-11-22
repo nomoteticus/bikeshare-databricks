@@ -32,6 +32,10 @@
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(47,111,214,0.0); } 50% { box-shadow: 0 0 0 6px rgba(47,111,214,0.25); } }
   .stats { display: flex; gap: 12px; font-size: 13px; color: #3b4252; white-space: nowrap; }
   .stats b { font-size: 17px; color: var(--ink); }
+  /* fixed slots: only the numbers change, the words stay in place (right-aligned, equal-width digits).
+     Widths fit the largest expected value: 9,999 docked, ~999 out, 100% active. */
+  .stats b.num { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
+  .stats .w-docked { width: 4.5ch; } .stats .w-out { width: 4.1ch; } .stats .w-active { width: 4.7ch; }
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .sw-line { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: var(--accent); }
@@ -48,7 +52,7 @@
   #timeLabel { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 56px; line-height: 1; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
   .round { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
   .round:disabled { opacity: 0.3; cursor: default; }
-  #weatherPanel { right: 20px; width: 310px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+  #weatherPanel { right: 20px; width: 330px;   /* same as #cityPanel, so the centered clock panel has equal gaps on both sides */ padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
   #weatherPanel .wx-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   #weatherPanel .wx-text div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #fcLabel { font-size: 11px; font-weight: 600; color: #8a5a00; height: 15px; }
@@ -95,7 +99,7 @@
             <span id="hintText">Change city</span>
           </span>
         </button>
-        <div class="stats"><div><b id="dockedLabel">–</b> in docks</div><div><b id="outLabel">–</b> out</div><div title="Share of the city's stations whose bike count changed during the hour"><b id="activeLabel">–</b> active</div></div>
+        <div class="stats"><div><b id="dockedLabel" class="num w-docked">–</b> in docks</div><div><b id="outLabel" class="num w-out">–</b> out</div><div title="Share of the city's stations whose bike count changed during the hour"><b id="activeLabel" class="num w-active">–</b> active</div></div>
         <div class="legend"><span><i class="sw-line"></i><span id="legendToday">Out today</span></span><span><i class="sw-dash"></i>Yesterday</span></div>
       </div>
       <ul id="cityList" role="listbox" aria-label="Choose a city" tabindex="-1" hidden></ul>
@@ -833,8 +837,10 @@
     if (vNow != null) { ell(px, py, 9, 9, '#ffffff', 1); ell(px, py, 6, 6, '#ff7a1a', 1); }
     const docked = at(d, 'docked_bikes', a), outNow = at(d, 'bikes_out_est', a);
     const activeNow = at(d, 'share_stations_active', a);
-    // same three metrics as the city panel; activity is unknown for the latest hour (needs the next hour)
-    const label = fmt(docked) + ' docked · ~' + fmt(outNow) + ' out · ' + (activeNow == null ? 'activity n/a' : Math.round(activeNow * 100) + '% active');
+    // marker label shows only the metric of the chart; the city panel shows all three
+    const label = mode === 'active' ? (activeNow == null ? 'activity not known yet' : Math.round(activeNow * 100) + '% active')
+      : mode === 'docked' ? fmt(docked) + ' docked'
+      : '~' + fmt(outNow) + ' out';
     ctx.font = '700 12px Inter, sans-serif';
     const half = Math.ceil(ctx.measureText(label).width / 2) + 12;           // pill sized to the text
     const lx = clamp(px, X0 + half, 1185 - half), ly = py < 230 ? py + 26 : py - 26;
@@ -878,7 +884,7 @@
     $('tempLabel').textContent = (temp == null ? '–' : temp.toFixed(1)) + ' °C';
     $('condLabel').textContent = kind === 'snow' ? 'Snow · ' + snow.toFixed(1) + ' cm/h' : kind === 'rain' ? 'Rain · ' + precip.toFixed(1) + ' mm/h' : cloud > 70 ? 'Overcast' : cloud > 30 ? 'Partly cloudy' : dayF > 0.5 ? 'Sunny' : 'Clear night';
     const di2 = d.dayInfo[h0.date_local] || {};
-    $('cloudLabel').textContent = 'Cloud ' + Math.round(cloud) + '% · sun ' + (di2.sunrise_local || '–') + '–' + (di2.sunset_local || '–');
+    $('cloudLabel').textContent = 'Cloud ' + Math.round(cloud) + '% · daylight ' + (di2.sunrise_local || '–') + '–' + (di2.sunset_local || '–');   // sunrise to sunset of the day
     $('fcLabel').textContent = hNear.weather_is_forecast ? 'Forecast (latest weather pull)' : '';
     setIcon(kind, cloud, dayF);
     canvas.setAttribute('aria-label', d.city_name + ', ' + $('dayLabel').textContent + ' ' + $('timeLabel').textContent + ': ' + fmt(docked) + ' bikes docked, about ' + fmt(outNow) + ' out, ' + (activeNow == null ? 'activity not known yet' : Math.round(activeNow * 100) + '% of stations active') + '; ' + $('condLabel').textContent + ', ' + $('tempLabel').textContent);
