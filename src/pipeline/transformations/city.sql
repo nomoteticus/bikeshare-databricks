@@ -66,6 +66,16 @@ the spine has no gaps). bikes_out_est = fleet_baseline_bikes - docked_bikes. The
 fleet changes (repairs, operator moves); found 19 Nov 2026 in Zurich, where docked bikes at night fell about 65
 in two days. The last 12 hours are provisional: their baseline can still rise when new hours arrive.
 
+ACTIVITY (share of stations with activity): a station is active in an hour when its bike count at the start of the
+next hour differs from the count at the start of this hour (bikes taken or returned during the hour; a take and a
+return that cancel out are not seen). share_stations_active_raw = n_stations_active / stations reporting both hours,
+only when this AND the next hour are ok and at least 90% of the city's stations are compared; otherwise NULL.
+share_stations_active = raw value when valid, else linear interpolation between the nearest valid hours; NULL at the
+edges (the latest hour has no next hour yet). Stations that report late (Velospot reports on events, often hours later)
+show their activity in the hour the report arrives, which flattens the curve; cities where this dominates are left out
+of the animation (ref_cities.in_daily_animation). Uses the next hour, so for display; as a forecasting feature use
+lagged values only.
+
 WEATHER: from the city's weather cell (ref_cities.weather_location_id). Instant values at the hour start; precipitation
 and snowfall summed DURING the hour (silver_weather row stamped hour_ts + 1 hour, as in gold_station_hour_features).
 
@@ -98,6 +108,10 @@ CREATE OR REFRESH MATERIALIZED VIEW gold_city_hour (
   bikes_out_provisional    BOOLEAN   COMMENT 'TRUE for the last 12 hours of data: baseline may still change as new hours arrive',
   bikes_out_peak_recent_7d INT       COMMENT 'Max bikes_out_est of the city over the last 168 hours of data (same value on all rows); display scale',
   bikes_out_share_of_peak  DOUBLE    COMMENT 'bikes_out_est / bikes_out_peak_recent_7d, 0 to 1; the animation draws 9 bikes at 1',
+  n_stations_active        INT       COMMENT 'Stations whose bike count changed during the hour (count at the next hour start differs from this hour start)',
+  share_stations_active_raw DOUBLE   COMMENT 'n_stations_active / stations reporting both hours; NULL unless this and the next hour are ok and 90%+ of stations are compared',
+  share_stations_active    DOUBLE    COMMENT 'Share of stations with activity during the hour, 0 to 1: raw value when valid, else linear interpolation; NULL at the edges',
+  is_activity_imputed      BOOLEAN   COMMENT 'TRUE when share_stations_active is interpolated (share_stations_active_raw is NULL)',
   temperature_c            DOUBLE    COMMENT 'Air temperature at 2 m at the hour start, deg C (city weather cell)',
   precipitation_mm         DOUBLE    COMMENT 'Total precipitation during the hour, mm (rain + snow water equivalent)',
   snowfall_cm              DOUBLE    COMMENT 'Snowfall during the hour, cm',
@@ -112,7 +126,8 @@ CREATE OR REFRESH MATERIALIZED VIEW gold_city_hour (
   light_phase              STRING    COMMENT 'day (elevation > -0.833), twilight (to -6) or night, at the hour start',
   CONSTRAINT known_status        EXPECT (data_status IN ('ok', 'missing', 'partial', 'glitch_known', 'glitch_suspected')),
   CONSTRAINT bikes_out_not_negative EXPECT (bikes_out_est >= 0),
-  CONSTRAINT has_weather         EXPECT (temperature_c IS NOT NULL)
+  CONSTRAINT has_weather         EXPECT (temperature_c IS NOT NULL),
+  CONSTRAINT activity_in_range   EXPECT (share_stations_active IS NULL OR share_stations_active BETWEEN 0 AND 1)
 )
 CLUSTER BY (city_id, hour_ts)
 COMMENT 'City x UTC hour: docked bikes (raw and cleaned), data status, estimated bikes out, weather and sun. Rules in city.sql'
@@ -137,6 +152,22 @@ city_observed AS (                                            -- observed hours 
         COUNT(*)                   AS n_stations_reporting,
         SUM(h.bikes_at_hour_start) AS docked_bikes_raw
     FROM gold_station_hour AS h
+    JOIN silver_station_city AS sc
+        ON  h.provider_id = sc.provider_id
+        AND h.station_id  = sc.station_id
+    GROUP BY sc.city_id, h.hour_ts
+),
+city_activity AS (                                            -- stations whose count changed during the hour (see header)
+    SELECT
+        sc.city_id,
+        h.hour_ts,
+        COUNT(*)                                                    AS n_stations_compared,
+        COUNT_IF(nx.bikes_at_hour_start <> h.bikes_at_hour_start)   AS n_stations_active
+    FROM gold_station_hour AS h
+    JOIN gold_station_hour AS nx                              -- the same station one hour later (self-join, so a gap gives no row)
+        ON  nx.provider_id = h.provider_id
+        AND nx.station_id  = h.station_id
+        AND nx.hour_ts     = h.hour_ts + INTERVAL 1 HOUR
     JOIN silver_station_city AS sc
         ON  h.provider_id = sc.provider_id
         AND h.station_id  = sc.station_id
@@ -195,6 +226,8 @@ city_hour_status AS (
         cs.n_stations_city,
         COALESCE(o.n_stations_reporting, 0) AS n_stations_reporting,
         o.docked_bikes_raw,
+        a.n_stations_compared,
+        a.n_stations_active,
         CASE
             WHEN kg.hour_ts IS NOT NULL                                      THEN 'glitch_known'
             WHEN sg.hour_ts IS NOT NULL                                      THEN 'glitch_suspected'
@@ -209,6 +242,9 @@ city_hour_status AS (
     LEFT JOIN city_observed AS o
         ON  o.city_id = c.city_id
         AND o.hour_ts = sp.hour_ts
+    LEFT JOIN city_activity AS a
+        ON  a.city_id = c.city_id
+        AND a.hour_ts = sp.hour_ts
     LEFT JOIN city_known_glitch AS kg
         ON  kg.city_id = c.city_id
         AND kg.hour_ts = sp.hour_ts
@@ -216,15 +252,30 @@ city_hour_status AS (
         ON  sg.city_id = c.city_id
         AND sg.hour_ts = sp.hour_ts
 ),
-city_hour_neighbors AS (                                      -- nearest ok hours before and after, for interpolation
+city_hour_activity AS (                                       -- raw activity share, valid only when this and the next hour are ok
     SELECT
         *,
+        CASE
+            WHEN data_status = 'ok'
+             AND LEAD(data_status) OVER (PARTITION BY city_id ORDER BY hour_ts) = 'ok'
+             AND n_stations_compared >= 0.9 * n_stations_city
+            THEN n_stations_active / n_stations_compared
+        END AS share_stations_active_raw
+    FROM city_hour_status
+),
+city_hour_neighbors AS (                                      -- nearest valid hours before and after, for interpolation
+    SELECT
+        *,
+        LAST_VALUE(share_stations_active_raw, TRUE)                                    OVER w_before AS prev_ok_share,
+        LAST_VALUE(CASE WHEN share_stations_active_raw IS NOT NULL THEN hour_ts END, TRUE) OVER w_before AS prev_share_ts,
+        FIRST_VALUE(share_stations_active_raw, TRUE)                                   OVER w_after  AS next_ok_share,
+        FIRST_VALUE(CASE WHEN share_stations_active_raw IS NOT NULL THEN hour_ts END, TRUE) OVER w_after  AS next_share_ts,
         CASE WHEN data_status = 'ok' THEN docked_bikes_raw END AS ok_bikes,
         LAST_VALUE(CASE WHEN data_status = 'ok' THEN docked_bikes_raw END, TRUE) OVER w_before AS prev_ok_bikes,
         LAST_VALUE(CASE WHEN data_status = 'ok' THEN hour_ts END, TRUE)          OVER w_before AS prev_ok_ts,
         FIRST_VALUE(CASE WHEN data_status = 'ok' THEN docked_bikes_raw END, TRUE) OVER w_after AS next_ok_bikes,
         FIRST_VALUE(CASE WHEN data_status = 'ok' THEN hour_ts END, TRUE)          OVER w_after AS next_ok_ts
-    FROM city_hour_status
+    FROM city_hour_activity
     WINDOW
         w_before AS (PARTITION BY city_id ORDER BY hour_ts ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),
         w_after  AS (PARTITION BY city_id ORDER BY hour_ts ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
@@ -240,7 +291,15 @@ city_hour_clean AS (
                     * (UNIX_SECONDS(hour_ts) - UNIX_SECONDS(prev_ok_ts))
                     / (UNIX_SECONDS(next_ok_ts) - UNIX_SECONDS(prev_ok_ts))
             ELSE COALESCE(prev_ok_bikes, next_ok_bikes)
-        END) AS INT) AS docked_bikes
+        END) AS INT) AS docked_bikes,
+        share_stations_active_raw IS NULL AS is_activity_imputed,
+        CASE
+            WHEN share_stations_active_raw IS NOT NULL THEN share_stations_active_raw
+            WHEN prev_ok_share IS NOT NULL AND next_ok_share IS NOT NULL THEN
+                prev_ok_share + (next_ok_share - prev_ok_share)
+                    * (UNIX_SECONDS(hour_ts) - UNIX_SECONDS(prev_share_ts))
+                    / (UNIX_SECONDS(next_share_ts) - UNIX_SECONDS(prev_share_ts))
+        END AS share_stations_active
     FROM city_hour_neighbors
 ),
 city_hour_out AS (
@@ -287,6 +346,10 @@ SELECT
     s.bikes_out_provisional,
     CAST(s.bikes_out_peak_recent_7d AS INT)                             AS bikes_out_peak_recent_7d,
     CAST(TRY_DIVIDE(s.bikes_out_est, s.bikes_out_peak_recent_7d) AS DOUBLE) AS bikes_out_share_of_peak,
+    CAST(s.n_stations_active AS INT)                                    AS n_stations_active,
+    CAST(ROUND(s.share_stations_active_raw, 4) AS DOUBLE)               AS share_stations_active_raw,
+    CAST(ROUND(s.share_stations_active, 4) AS DOUBLE)                   AS share_stations_active,
+    s.is_activity_imputed,
     CAST(w.temperature_2m AS DOUBLE)                                    AS temperature_c,
     CAST(w_next.precipitation AS DOUBLE)                                AS precipitation_mm,
     CAST(w_next.snowfall AS DOUBLE)                                     AS snowfall_cm,

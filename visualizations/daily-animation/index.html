@@ -114,7 +114,7 @@
     <label class="timeline"><span id="windowLabel">Timeline</span><input id="scrub" type="range" min="0" max="1" step="1" value="0"></label>
     <label>Look back<select id="daysSel"><option value="1">Today</option><option value="3">3 days</option><option value="7" selected>7 days</option></select></label>
     <label>Speed<select id="speedSel"><option value="0.25">0.25 s/h</option><option value="0.5">0.5 s/h</option><option value="1" selected>1 s/h</option><option value="2">2 s/h</option></select></label>
-    <div class="field"><span id="chartLbl">Chart shows</span><div class="seg" role="group" aria-labelledby="chartLbl"><button id="modeOut" type="button" aria-pressed="true">Bikes out</button><button id="modeDocked" type="button" aria-pressed="false">Bikes docked</button></div></div>
+    <label>Chart shows<select id="modeSel"><option value="out" selected>Bikes out</option><option value="docked">Bikes docked</option><option value="active">Stations with activity (%)</option></select></label>
     <label>Bikes<select id="styleSel"><option value="bikes" selected>Bikes only</option><option value="slate">Slate pastel</option><option value="red">Classic red</option><option value="teal">Deep teal</option><option value="hivis">Hi-vis commuter</option></select></label>
   </div>
   <p class="foot" id="foot"></p>
@@ -551,7 +551,7 @@
   const st = { index: null, city: null, data: {}, days: 7, speed: 1, mode: 'out', style: 'bikes', t: null, playing: false, clock: 0 };
   const hash = new URLSearchParams(location.hash.slice(1));
   if (['1', '3', '7'].includes(hash.get('days'))) st.days = +hash.get('days');
-  if (['docked', 'out'].includes(hash.get('chart'))) st.mode = hash.get('chart');
+  if (['docked', 'out', 'active'].includes(hash.get('chart'))) st.mode = hash.get('chart');
   if (STYLES[hash.get('bikes')]) st.style = hash.get('bikes');
   function writeHash() { try { history.replaceState(null, '', '#city=' + st.city + '&days=' + st.days + '&chart=' + st.mode + '&bikes=' + st.style); } catch (e) { /* sandboxed viewers */ } }
 
@@ -639,8 +639,8 @@
     const first = d.hours[w.start], last = d.hours[d.hours.length - 1];
     $('windowLabel').textContent = 'Timeline · ' + first.weekday_local + ' ' + dmy(first.date_local) + ' 00:00 → ' + last.weekday_local + ' ' + dmy(last.date_local) + ' ' + last.hour_local.slice(11);
     $('daysSel').value = String(st.days); $('speedSel').value = String(st.speed); $('styleSel').value = st.style;
-    $('modeDocked').setAttribute('aria-pressed', String(st.mode === 'docked')); $('modeOut').setAttribute('aria-pressed', String(st.mode === 'out'));
-    $('legendToday').textContent = st.mode === 'out' ? 'Out today' : 'Docked today';
+    $('modeSel').value = st.mode;
+    $('legendToday').textContent = { out: 'Out today', docked: 'Docked today', active: 'Active today' }[st.mode];
     $('playBtn').innerHTML = st.playing
       ? '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="3" y="2" width="4" height="14" rx="1" fill="#fff"/><rect x="11" y="2" width="4" height="14" rx="1" fill="#fff"/></svg>'
       : '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 2 L16 9 L4 16 Z" fill="#fff"/></svg>';
@@ -656,8 +656,7 @@
   $('daysSel').addEventListener('change', (e) => { st.days = +e.target.value; st.t = windowOf(cur()).tMax; st.playing = false; syncControls(); writeHash(); });
   $('speedSel').addEventListener('change', (e) => { st.speed = +e.target.value; });
   $('styleSel').addEventListener('change', (e) => { st.style = e.target.value; writeHash(); });
-  $('modeDocked').addEventListener('click', () => { st.mode = 'docked'; syncControls(); writeHash(); });
-  $('modeOut').addEventListener('click', () => { st.mode = 'out'; syncControls(); writeHash(); });
+  $('modeSel').addEventListener('change', (e) => { st.mode = e.target.value; syncControls(); writeHash(); });
   function stepDay(dir) { const w = windowOf(cur()); st.t = clamp(Math.round(st.t) + 24 * dir, 0, w.tMax); st.playing = false; syncControls(); }
   $('prevDay').addEventListener('click', () => stepDay(-1));
   $('nextDay').addEventListener('click', () => stepDay(1));
@@ -729,11 +728,15 @@
     if (night > 0.05) { ctx.globalAlpha = night * 0.85; ctx.drawImage(sk.lights, 0, 0, W, STREET); ctx.globalAlpha = 1; }
 
     // chart
-    const out = st.mode === 'out';
+    const mode = st.mode;
     let lo, hi;
-    if (out) { lo = 0; hi = Math.max(1, d.bikes_out_peak_recent_7d || 1); }
-    else { lo = Infinity; hi = -Infinity; for (let i = w.start; i < d.hours.length; i++) { lo = Math.min(lo, d.hours[i].docked_bikes); hi = Math.max(hi, d.hours[i].docked_bikes); } if (hi - lo < 1) hi = lo + 1; }
-    const field = out ? 'bikes_out_est' : 'docked_bikes';
+    if (mode === 'out') { lo = 0; hi = Math.max(1, d.bikes_out_peak_recent_7d || 1); }
+    else if (mode === 'active') {                                       // 0 to the window's highest share, rounded up to 10%
+      lo = 0; hi = 0; for (let i = w.start; i < d.hours.length; i++) hi = Math.max(hi, d.hours[i].share_stations_active || 0);
+      hi = Math.max(0.1, Math.ceil(hi * 10) / 10);
+    } else { lo = Infinity; hi = -Infinity; for (let i = w.start; i < d.hours.length; i++) { lo = Math.min(lo, d.hours[i].docked_bikes); hi = Math.max(hi, d.hours[i].docked_bikes); } if (hi - lo < 1) hi = lo + 1; }
+    const field = { out: 'bikes_out_est', docked: 'docked_bikes', active: 'share_stations_active' }[mode];
+    const fmtV = (v) => (mode === 'active' ? Math.round(v * 100) + '%' : fmt(v));
     const yOf = (v) => CH_BOT - (v - lo) / (hi - lo) * (CH_BOT - CH_TOP);
     for (let h = 0; h < 24; h++) {                                      // grey bands for hours the pipeline filled in
       const q = dayStart + h; if (q > a + 1e-9 || q >= d.hours.length) break;
@@ -747,30 +750,37 @@
     [lo, hi].forEach((v) => {
       const y = yOf(v); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
       ctx.beginPath(); ctx.moveTo(X0, y); ctx.lineTo(X1, y); ctx.stroke(); ctx.setLineDash([]);
-      pill(X0 - 70, y - 10, 62, 20, '#1d2230', 0.7); text(fmt(v), X0 - 39, y + 0.5, '600 12px Inter, sans-serif', '#ffffff');
+      pill(X0 - 70, y - 10, 62, 20, '#1d2230', 0.7); text(fmtV(v), X0 - 39, y + 0.5, '600 12px Inter, sans-serif', '#ffffff');
     });
     const di = d.dates.indexOf(h0.date_local);
     if (di > 0) {
       const p0 = d.firstIdx[d.dates[di - 1]];
       ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath();
-      for (let q = p0, k = 0; q <= p0 + 24 && q < d.hours.length; q += 0.5, k++) { const x = X0 + (q - p0) / 24 * XW, y = yOf(at(d, field, q)); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      let pen = false;
+      for (let q = p0; q <= p0 + 24 && q < d.hours.length; q += 0.5) { const v = at(d, field, q); if (v == null) { pen = false; continue; } const x = X0 + (q - p0) / 24 * XW, y = yOf(v); pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; }
       ctx.stroke(); ctx.setLineDash([]);
     }
-    const pts = [];
-    for (let q = dayStart; q < a; q += 0.25) pts.push([X0 + (q - dayStart) / 24 * XW, yOf(at(d, field, q))]);
-    const vNow = at(d, field, a); pts.push([px, yOf(vNow)]);
+    const pts = [];                                                     // hours without a value (e.g. the latest hour's activity) are skipped
+    for (let q = dayStart; q < a; q += 0.25) { const v = at(d, field, q); if (v != null) pts.push([X0 + (q - dayStart) / 24 * XW, yOf(v)]); }
+    const vNow = at(d, field, a); if (vNow != null) pts.push([px, yOf(vNow)]);
+    const last = pts.length ? pts[pts.length - 1] : [px, CH_BOT];
     ctx.globalAlpha = 0.45; ctx.fillStyle = '#ff7a1a';
-    ctx.beginPath(); ctx.moveTo(X0, CH_BOT); pts.forEach((p) => ctx.lineTo(p[0], p[1])); ctx.lineTo(px, CH_BOT); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    if (pts.length) { ctx.beginPath(); ctx.moveTo(pts[0][0], CH_BOT); pts.forEach((p) => ctx.lineTo(p[0], p[1])); ctx.lineTo(last[0], CH_BOT); ctx.closePath(); ctx.fill(); }
+    ctx.globalAlpha = 1;
     const path = new Path2D(); pts.forEach((p, k) => (k ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1])));
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 8; ctx.stroke(path);
     ctx.strokeStyle = '#ff7a1a'; ctx.lineWidth = 4; ctx.stroke(path);
-    const py = yOf(vNow);
+    const py = last[1];
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, 598); ctx.stroke();
-    ell(px, py, 9, 9, '#ffffff', 1); ell(px, py, 6, 6, '#ff7a1a', 1);
+    if (vNow != null) { ell(px, py, 9, 9, '#ffffff', 1); ell(px, py, 6, 6, '#ff7a1a', 1); }
     const docked = at(d, 'docked_bikes', a), outNow = at(d, 'bikes_out_est', a);
+    const activeNow = at(d, 'share_stations_active', a);
+    const label = mode === 'active'
+      ? (activeNow == null ? 'activity not known yet' : Math.round(activeNow * 100) + '% of stations active')
+      : fmt(docked) + ' docked · ~' + fmt(outNow) + ' out';
     const lx = clamp(px, X0 + 85, 1115), ly = py < 230 ? py + 26 : py - 26;
-    pill(lx - 85, ly - 11, 170, 22, '#ffffff', 0.95); text(fmt(docked) + ' docked · ~' + fmt(outNow) + ' out', lx, ly + 0.5, '700 12px Inter, sans-serif', '#1d2230');
+    pill(lx - 85, ly - 11, 170, 22, '#ffffff', 0.95); text(label, lx, ly + 0.5, '700 12px Inter, sans-serif', '#1d2230');
 
     // bikes (count from the pipeline's share of the 7-day peak)
     const share = clamp(at(d, 'bikes_out_share_of_peak', a) ?? 0, 0, 1), n = 9 * share, k = Math.ceil(n - 1e-6);
@@ -849,7 +859,8 @@
       const wanted = hash.get('city'), ids = st.index.cities.map((c) => c.city_id);
       await selectCity(ids.includes(wanted) ? wanted : (ids.includes('zurich') ? 'zurich' : ids[0]));
       $('foot').textContent = st.index.attribution + ' Data window ' + st.index.first_hour_local.replace('T', ' ') + ' to ' + st.index.last_hour_local.replace('T', ' ') +
-        ' (Zurich time), exported ' + st.index.generated_at_utc + ' from ' + st.index.source_table + '. Bikes out is an estimate: the most bikes docked within ±12 h minus bikes docked now; 9 bikes on the street = the city\'s busiest hour of the week. Grey bands: hours filled in by the pipeline (missing data or feed glitch).';
+        ' (Zurich time), exported ' + st.index.generated_at_utc + ' from ' + st.index.source_table + '. Bikes out is an estimate: the most bikes docked within ±12 h minus bikes docked now; 9 bikes on the street = the city\'s busiest hour of the week. Stations with activity: share of stations whose bike count changed during the hour. Grey bands: hours filled in by the pipeline (missing data or feed glitch).' +
+        ((st.index.not_shown || []).length ? ' Not shown: ' + st.index.not_shown.map((c) => c.city_name + ' (' + (c.note || 'excluded') + ')').join('; ') + '.' : '');
       $('loading').remove();
       let seen = false; try { seen = !!sessionStorage.getItem('cityHintSeen'); sessionStorage.setItem('cityHintSeen', '1'); } catch (e) { /* storage unavailable */ }
       if (!seen) $('cityHint').classList.add('pulse');
