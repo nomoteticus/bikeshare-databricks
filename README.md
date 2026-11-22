@@ -1,6 +1,6 @@
 # bikeshare-databricks
 
-Visualising and forecasting shared-bike availability at Swiss stations from time of day, seasonality and weather, built on Databricks.
+Visualizing and forecasting shared-bike availability at Swiss stations from time of day, seasonality and weather, built on Databricks.
 
 This is a learning project for Databricks data engineering: Lakeflow Jobs, Spark Declarative Pipelines, the medallion architecture, Unity Catalog, Git folders and Declarative Automation Bundles (formerly Databricks Asset Bundles). It runs on Databricks Free Edition (serverless).
 

@@ -48,7 +48,7 @@ The feed is real-time only: there is no history to download, so every missed pul
 | `bikeshare_pull_reference` | daily 04:15 | Downloads `station_information`, `providers`, `system_regions` |
 | `bikeshare_pull_weather` | daily 05:20 | One Open-Meteo request for all weather grid cells, window from 2 days before to 2 days after the run date; one JSON Lines file per run |
 | `bikeshare_refresh` | hourly at :10 | Runs the pipeline `bikeshare_stations` (all tables below) |
-| `bikeshare_export_daily_animation` | daily 06:40 | Writes the JSON files for the animation page |
+| `bikeshare_export_daily_animation` | daily 06:40 | Writes the JSON files for the animation page: the last 7 local days, or the 7 days up to a fixed `end_date` for a reproducible snapshot |
 
 Details worth knowing:
 
@@ -112,7 +112,7 @@ No type or time-zone conversions happen in bronze.
 
 Hand-maintained reference tables (`reference.sql`):
 
-- `ref_bike_systems`: the eight docked-bike systems in scope (Velospot, nextbike ×2, Donkey Republic ×5), with how complete their `capacity` is. The feed also carries cars, scooters and mopeds, and its own `vehicle_type` field is not reliable, so this list is the single filter for "bikes".
+- `ref_bike_systems`: the eight docked-bike systems in scope (Velospot, nextbike, invia BikeShare, Donkey Republic ×5), with how complete their `capacity` is and a short operator name for display. The feed also carries cars, scooters and mopeds, and its own `vehicle_type` field is not reliable, so this list is the single filter for "bikes".
 - `ref_cities`: 13 cities with 45 or more docked-bike stations (center, radius, canton, weather cell, and whether the animation shows the city).
 - `ref_data_incidents`: confirmed feed incidents per provider (see section 7).
 
@@ -169,7 +169,7 @@ The rolling ±12-hour maximum (instead of a fixed fleet size) absorbs slow chang
 
 **The bikes on the street.** The scene draws 0 to 9 bikes: `9 × bikes_out_share_of_peak`, i.e. 9 bikes = the city's busiest hour of the last 7 days. Cities are therefore comparable in rhythm, not in size.
 
-**Stations with activity (%).** A station counts as active in an hour when its bike count at the start of the next hour differs from the count at the start of this hour. `share_stations_active` = active stations / stations compared. It counts stations with a pickup or return, not trips: a pickup and a return at the same station within the hour cancel out. It is computed only when this and the next hour are `ok` and at least 90% of the city's stations can be compared; other hours are interpolated, and the latest hour is empty because its next hour does not exist yet.
+**Active stations (%).** Shown in the city panel, the marker label and as a chart option. A station counts as active in an hour when its bike count at the start of the next hour differs from the count at the start of this hour. `share_stations_active` = active stations / stations compared. It counts stations with a pickup or return, not trips: a pickup and a return at the same station within the hour cancel out. It is computed only when this and the next hour are `ok` and at least 90% of the city's stations can be compared; other hours are interpolated, and the latest hour is empty because its next hour does not exist yet.
 
 **Weather and light.** Temperature at the hour start, precipitation during the hour (`snow` when snowfall > 0, `rain` from 0.1 mm), and sun elevation for the day/night cycle. A "forecast" label marks hours whose weather is still a forecast.
 

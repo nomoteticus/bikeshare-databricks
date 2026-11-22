@@ -1,18 +1,19 @@
 -- Docked bike-share systems used in this project (the feed also contains cars, mopeds, scooters)
+-- operator_name: short brand for display (the feed's own names are city-specific, e.g. "Donkey Republic Geneva")
 CREATE OR REFRESH MATERIALIZED VIEW ref_bike_systems
-COMMENT "Docked bike-share systems in scope; single definition reused by weather, gold and ML"
+COMMENT "Docked bike-share systems in scope; single definition reused by weather, gold, export and ML"
 AS
 SELECT *
 FROM VALUES
-  ('velospot',                  'full'),
-  ('donkey_ge',                 'full'),
-  ('donkey_kreuzlingen',        'full'),
-  ('donkey_neuchatel',          'full'),
-  ('donkey_thun',               'full'),
-  ('donkey_yverdon-les-bains',  'full'),
-  ('nextbike_ms',               'partial'),
-  ('nextbike_ch',               'none')
-AS t(provider_id, capacity_coverage);   -- 'full' / 'partial' / 'none'
+  ('velospot',                  'full',    'Velospot'),
+  ('donkey_ge',                 'full',    'Donkey Republic'),
+  ('donkey_kreuzlingen',        'full',    'Donkey Republic'),
+  ('donkey_neuchatel',          'full',    'Donkey Republic'),
+  ('donkey_thun',               'full',    'Donkey Republic'),
+  ('donkey_yverdon-les-bains',  'full',    'Donkey Republic'),
+  ('nextbike_ms',               'partial', 'invia BikeShare'),
+  ('nextbike_ch',               'none',    'nextbike')
+AS t(provider_id, capacity_coverage, operator_name);   -- capacity_coverage: 'full' / 'partial' / 'none'
 
 /*
 Cities for city-level aggregates (gold_city_hour) and the daily animation.

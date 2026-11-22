@@ -30,8 +30,12 @@
   .city-btn:hover .city-hint { background: #d8e6fc; }
   .city-hint.pulse { animation: pulse 1.6s ease-in-out 3; }
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(47,111,214,0.0); } 50% { box-shadow: 0 0 0 6px rgba(47,111,214,0.25); } }
-  .stats { display: flex; gap: 16px; font-size: 13px; color: #3b4252; white-space: nowrap; }
+  .stats { display: flex; gap: 12px; font-size: 13px; color: #3b4252; white-space: nowrap; }
   .stats b { font-size: 17px; color: var(--ink); }
+  /* fixed slots: only the numbers change, the words stay in place (right-aligned, equal-width digits).
+     Widths fit the largest expected value: 9,999 docked, ~999 out, 100% active. */
+  .stats b.num { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
+  .stats .w-docked { width: 4.5ch; } .stats .w-out { width: 4.1ch; } .stats .w-active { width: 4.7ch; }
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .sw-line { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: var(--accent); }
@@ -48,7 +52,7 @@
   #timeLabel { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 56px; line-height: 1; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
   .round { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
   .round:disabled { opacity: 0.3; cursor: default; }
-  #weatherPanel { right: 20px; width: 310px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+  #weatherPanel { right: 20px; width: 330px;   /* same as #cityPanel, so the centered clock panel has equal gaps on both sides */ padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
   #weatherPanel .wx-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   #weatherPanel .wx-text div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #fcLabel { font-size: 11px; font-weight: 600; color: #8a5a00; height: 15px; }
@@ -66,6 +70,9 @@
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
   .foot a { color: #2f5d8a; text-decoration: underline; }
+  .foot .line { display: block; }
+  .foot .line + .line { margin-top: 3px; }
+  .foot b { color: #3b4252; font-weight: 600; }
   .foot { margin: 0; padding: 8px 18px 12px; font-size: 11.5px; line-height: 1.5; color: #5b6272; background: #fff; border-radius: 0 0 14px 14px; }
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--muted); }
 </style>
@@ -74,7 +81,7 @@
 <main class="page">
   <div class="intro">
     <h1>Swiss bike-share, hour by hour</h1>
-    <p>Docked bikes, bikes out and weather over the last days, replayed.</p>
+    <p>Docked bikes, bikes out, active stations and weather over the last days, replayed.</p>
   </div>
   <div id="stageWrap">
     <div id="stage">
@@ -92,7 +99,7 @@
             <span id="hintText">Change city</span>
           </span>
         </button>
-        <div class="stats"><div><b id="dockedLabel">–</b> in docks</div><div><b id="outLabel">–</b> out (est.)</div></div>
+        <div class="stats"><div><b id="dockedLabel" class="num w-docked">–</b> in docks</div><div><b id="outLabel" class="num w-out">–</b> out</div><div title="Share of the city's stations whose bike count changed during the hour"><b id="activeLabel" class="num w-active">–</b> active</div></div>
         <div class="legend"><span><i class="sw-line"></i><span id="legendToday">Out today</span></span><span><i class="sw-dash"></i>Yesterday</span></div>
       </div>
       <ul id="cityList" role="listbox" aria-label="Choose a city" tabindex="-1" hidden></ul>
@@ -115,7 +122,7 @@
     <label class="timeline"><span id="windowLabel">Timeline</span><input id="scrub" type="range" min="0" max="1" step="1" value="0"></label>
     <label>Look back<select id="daysSel"><option value="1">Today</option><option value="3">3 days</option><option value="7" selected>7 days</option></select></label>
     <label>Speed<select id="speedSel"><option value="0.25">0.25 s/h</option><option value="0.5">0.5 s/h</option><option value="1" selected>1 s/h</option><option value="2">2 s/h</option></select></label>
-    <label>Chart shows<select id="modeSel"><option value="out" selected>Bikes out</option><option value="docked">Bikes docked</option><option value="active">Stations with activity (%)</option></select></label>
+    <label>Chart shows<select id="modeSel"><option value="out" selected>Bikes out</option><option value="docked">Bikes docked</option><option value="active">Active stations (%)</option></select></label>
     <label>Bikes<select id="styleSel"><option value="bikes" selected>Bikes only</option><option value="slate">Slate pastel</option><option value="red">Classic red</option><option value="teal">Deep teal</option><option value="hivis">Hi-vis commuter</option></select></label>
   </div>
   <p class="foot" id="foot"></p>
@@ -565,27 +572,49 @@
     { kind: 'weather', name: 'Open-Meteo.com', url: 'https://open-meteo.com/', license: 'CC BY 4.0',
       license_url: 'https://creativecommons.org/licenses/by/4.0/', note: 'MeteoSwiss ICON models; aggregated by city and hour' },
   ];
-  function renderFooter(index, rest) {
+  const DOC_URL = 'https://github.com/nomoteticus/bikeshare-databricks/blob/main/docs/DATA_PIPELINE.md';
+  const NOT_SHOWN_REASON = 'station data not fresh enough: stations report too rarely to show an hourly pattern';
+  const fmtLocal = (t) => t.replace('T', ' ');
+  // Footer: one line per kind of information. Built with DOM nodes (no innerHTML), links open in a new tab.
+  function renderFooter(index) {
     const foot = $('foot');
     foot.textContent = '';
     const link = (href, label) => { const a = document.createElement('a'); a.href = href; a.textContent = label; a.target = '_blank'; a.rel = 'noopener'; return a; };
-    const add = (x) => foot.append(typeof x === 'string' ? document.createTextNode(x) : x);
+    const line = (label, ...parts) => {
+      const el = document.createElement('span'); el.className = 'line';
+      const b = document.createElement('b'); b.textContent = label + ': '; el.append(b);
+      parts.forEach((x) => el.append(typeof x === 'string' ? document.createTextNode(x) : x));
+      foot.append(el);
+    };
     const sources = (index.sources && index.sources.length) ? index.sources : DEFAULT_SOURCES;
-    const bikes = sources.find((s) => s.kind === 'bikes');
-    const weather = sources.find((s) => s.kind === 'weather');
-    if (bikes) {
-      add('Bike data: '); add(link(bikes.url, bikes.name));
-      if (bikes.publisher) add(', ' + bikes.publisher);
-      if (bikes.dataset_url) { add(' ('); add(link(bikes.dataset_url, 'dataset')); add(')'); }
-      add('. ');
+    const bikes = sources.find((x) => x.kind === 'bikes');
+    const weather = sources.find((x) => x.kind === 'weather');
+    if (bikes) line('Bike data', link(bikes.url, bikes.name), bikes.publisher ? ', ' + bikes.publisher + ' (' : ' (',
+                    link(bikes.dataset_url || bikes.url, 'dataset'), ')');
+    if (weather) line('Weather data', link(weather.url, weather.name), ', ',
+                      weather.license_url ? link(weather.license_url, weather.license) : (weather.license || ''),
+                      weather.note ? ' (' + weather.note + ')' : '');
+    // Bike-share systems: shown cities grouped by operator brand (from the export; skipped for older exports)
+    const byOperator = new Map();
+    (index.cities || []).forEach((c) => (c.providers || []).forEach((p) => {
+      const k = p.operator_name || p.provider_id;
+      if (!byOperator.has(k)) byOperator.set(k, []);
+      if (!byOperator.get(k).includes(c.city_name)) byOperator.get(k).push(c.city_name);
+    }));
+    if (byOperator.size) {
+      const groups = [...byOperator.entries()].sort((a, b) => b[1].length - a[1].length)
+        .map(([op, cs]) => op + ' (' + cs.sort((x, y) => x.localeCompare(y)).join(', ') + ')');
+      line('Bike-share systems', groups.join(' · '));
     }
-    if (weather) {
-      add('Weather data by '); add(link(weather.url, weather.name));
-      if (weather.license) { add(', '); add(weather.license_url ? link(weather.license_url, weather.license) : weather.license); }
-      if (weather.note) add(' (' + weather.note + ')');
-      add('.');
-    }
-    add(rest);
+    line('Data window', fmtLocal(index.first_hour_local) + ' to ' + fmtLocal(index.last_hour_local) + ' (Zurich time), exported '
+         + index.generated_at_utc + ' from ' + index.source_table);
+    line('Bikes in docks', 'bikes standing in a dock at the start of the hour, summed over the city\'s stations; hours with missing or faulty data are filled in by the pipeline.');
+    line('Bikes out', 'estimated as the most bikes docked within ±12 h minus bikes docked now; 9 bikes on the street = the city\'s busiest hour of the week.');
+    line('Active stations (%)', 'share of the city\'s stations whose bike count changed during the hour (a bike taken or returned); not known yet for the latest hour.');
+    line('Grey bands', 'hours filled in by the pipeline (missing data or feed glitch).');
+    const ns = index.not_shown || [];
+    if (ns.length) line('Not shown', ns.map((c) => c.city_name).join(', ') + ' (' + (index.not_shown_reason || NOT_SHOWN_REASON) + ').');
+    line('How it is built', 'the Databricks pipeline (ingestion, bronze/silver/gold tables) and how each metric is computed are described in ', link(DOC_URL, 'docs/DATA_PIPELINE.md'), '.');
   }
 
   async function loadJson(name) {
@@ -808,11 +837,14 @@
     if (vNow != null) { ell(px, py, 9, 9, '#ffffff', 1); ell(px, py, 6, 6, '#ff7a1a', 1); }
     const docked = at(d, 'docked_bikes', a), outNow = at(d, 'bikes_out_est', a);
     const activeNow = at(d, 'share_stations_active', a);
-    const label = mode === 'active'
-      ? (activeNow == null ? 'activity not known yet' : Math.round(activeNow * 100) + '% of stations active')
-      : fmt(docked) + ' docked · ~' + fmt(outNow) + ' out';
-    const lx = clamp(px, X0 + 85, 1115), ly = py < 230 ? py + 26 : py - 26;
-    pill(lx - 85, ly - 11, 170, 22, '#ffffff', 0.95); text(label, lx, ly + 0.5, '700 12px Inter, sans-serif', '#1d2230');
+    // marker label shows only the metric of the chart; the city panel shows all three
+    const label = mode === 'active' ? (activeNow == null ? 'activity not known yet' : Math.round(activeNow * 100) + '% active')
+      : mode === 'docked' ? fmt(docked) + ' docked'
+      : '~' + fmt(outNow) + ' out';
+    ctx.font = '700 12px Inter, sans-serif';
+    const half = Math.ceil(ctx.measureText(label).width / 2) + 12;           // pill sized to the text
+    const lx = clamp(px, X0 + half, 1185 - half), ly = py < 230 ? py + 26 : py - 26;
+    pill(lx - half, ly - 11, 2 * half, 22, '#ffffff', 0.95); text(label, lx, ly + 0.5, '700 12px Inter, sans-serif', '#1d2230');
 
     // bikes (count from the pipeline's share of the 7-day peak)
     const share = clamp(at(d, 'bikes_out_share_of_peak', a) ?? 0, 0, 1), n = 9 * share, k = Math.ceil(n - 1e-6);
@@ -847,14 +879,15 @@
     $('dayLabel').textContent = h0.weekday_local + ' ' + dmy(h0.date_local);
     $('timeLabel').textContent = h0.hour_local.slice(11, 13) + ':00';
     $('dockedLabel').textContent = fmt(docked); $('outLabel').textContent = '~' + fmt(outNow);
+    $('activeLabel').textContent = activeNow == null ? '–' : Math.round(activeNow * 100) + '%';
     $('prevDay').disabled = di <= d.dates.indexOf(d.hours[w.start].date_local); $('nextDay').disabled = di >= d.dates.length - 1;
     $('tempLabel').textContent = (temp == null ? '–' : temp.toFixed(1)) + ' °C';
     $('condLabel').textContent = kind === 'snow' ? 'Snow · ' + snow.toFixed(1) + ' cm/h' : kind === 'rain' ? 'Rain · ' + precip.toFixed(1) + ' mm/h' : cloud > 70 ? 'Overcast' : cloud > 30 ? 'Partly cloudy' : dayF > 0.5 ? 'Sunny' : 'Clear night';
     const di2 = d.dayInfo[h0.date_local] || {};
-    $('cloudLabel').textContent = 'Cloud ' + Math.round(cloud) + '% · sun ' + (di2.sunrise_local || '–') + '–' + (di2.sunset_local || '–');
+    $('cloudLabel').textContent = 'Cloud ' + Math.round(cloud) + '% · daylight ' + (di2.sunrise_local || '–') + '–' + (di2.sunset_local || '–');   // sunrise to sunset of the day
     $('fcLabel').textContent = hNear.weather_is_forecast ? 'Forecast (latest weather pull)' : '';
     setIcon(kind, cloud, dayF);
-    canvas.setAttribute('aria-label', d.city_name + ', ' + $('dayLabel').textContent + ' ' + $('timeLabel').textContent + ': ' + fmt(docked) + ' bikes docked, about ' + fmt(outNow) + ' out; ' + $('condLabel').textContent + ', ' + $('tempLabel').textContent);
+    canvas.setAttribute('aria-label', d.city_name + ', ' + $('dayLabel').textContent + ' ' + $('timeLabel').textContent + ': ' + fmt(docked) + ' bikes docked, about ' + fmt(outNow) + ' out, ' + (activeNow == null ? 'activity not known yet' : Math.round(activeNow * 100) + '% of stations active') + '; ' + $('condLabel').textContent + ', ' + $('tempLabel').textContent);
     if (!st.playing) $('scrub').value = Math.floor(t + 1e-6);
   }
   let lastIcon = '';
@@ -890,9 +923,7 @@
       st.index = await loadJson('cities.json');
       const wanted = hash.get('city'), ids = st.index.cities.map((c) => c.city_id);
       await selectCity(ids.includes(wanted) ? wanted : (ids.includes('zurich') ? 'zurich' : ids[0]));
-      renderFooter(st.index, ' Data window ' + st.index.first_hour_local.replace('T', ' ') + ' to ' + st.index.last_hour_local.replace('T', ' ') +
-        ' (Zurich time), exported ' + st.index.generated_at_utc + ' from ' + st.index.source_table + '. Bikes out is an estimate: the most bikes docked within ±12 h minus bikes docked now; 9 bikes on the street = the city\'s busiest hour of the week. Stations with activity: share of stations whose bike count changed during the hour. Grey bands: hours filled in by the pipeline (missing data or feed glitch).' +
-        ((st.index.not_shown || []).length ? ' Not shown: ' + st.index.not_shown.map((c) => c.city_name + ' (' + (c.note || 'excluded') + ')').join('; ') + '.' : ''));
+      renderFooter(st.index);
       $('loading').remove();
       let seen = false; try { seen = !!sessionStorage.getItem('cityHintSeen'); sessionStorage.setItem('cityHintSeen', '1'); } catch (e) { /* storage unavailable */ }
       if (!seen) $('cityHint').classList.add('pulse');
