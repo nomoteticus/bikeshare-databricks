@@ -2,12 +2,12 @@ bundle:
   name: bikeshare
 
 include:
-  - resources/*.yml          # job + pipeline come here in 4d/4e
+  - resources/*.yml          # jobs and the pipeline
 
 variables:
   catalog:
     description: Unity Catalog catalog for this environment
-    default: dev             # which one is the safe default?
+    default: dev             # dev unless a target overrides it
   schema:
     description: Schema for the bikeshare tables
     default: bikeshare
