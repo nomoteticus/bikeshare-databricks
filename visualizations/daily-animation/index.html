@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swiss bike-share, hour by hour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+  :root { --ink: #1d2230; --muted: #4b5263; --line: #cdd1d9; --bg: #f4f5f7; --accent: #ff7a1a; --ok: #16a34a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 16px 12px 24px; }
+  .intro { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin: 4px 4px 12px; }
+  .intro h1 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 26px; letter-spacing: -0.4px; }
+  .intro p { margin: 0; color: var(--muted); font-size: 14px; }
+  #stageWrap { position: relative; width: 100%; overflow: hidden; border-radius: 14px 14px 0 0; background: #dfeaf2; }
+  #stage { position: absolute; left: 0; top: 0; width: 1200px; height: 640px; transform-origin: 0 0; }
+  #scene { position: absolute; left: 0; top: 0; width: 1200px; height: 640px; display: block; }
+  .panel { position: absolute; top: 20px; height: 120px; background: rgba(255,255,255,0.92); border-radius: 16px; box-shadow: 0 4px 18px rgba(10,16,40,0.18); }
+  #cityPanel { left: 20px; width: 330px; overflow: hidden; padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+  .city-btn { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 3px; border-radius: 10px; padding: 2px 6px; margin: -2px -6px; }
+  .city-btn:hover { background: rgba(29,34,48,0.06); }
+  .city-btn:focus-visible { outline: 3px solid #2f6fd6; outline-offset: 2px; }
+  .city-row { display: flex; align-items: center; gap: 8px; }
+  #cityName { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.05; }
+  .chev { width: 22px; height: 22px; border-radius: 999px; background: #eef0f4; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.15s; }
+  .city-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .city-hint { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; font-size: 12px; font-weight: 600; color: #2457a6; background: #e8f0fd; padding: 3px 10px; border-radius: 999px; }
+  .city-btn:hover .city-hint { background: #d8e6fc; }
+  .city-hint.pulse { animation: pulse 1.6s ease-in-out 3; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(47,111,214,0.0); } 50% { box-shadow: 0 0 0 6px rgba(47,111,214,0.25); } }
+  .stats { display: flex; gap: 16px; font-size: 13px; color: #3b4252; white-space: nowrap; }
+  .stats b { font-size: 17px; color: var(--ink); }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw-line { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: var(--accent); }
+  .sw-dash { display: inline-block; width: 18px; height: 0; border-top: 2px dashed #6b7280; }
+  #cityList { position: absolute; left: 20px; top: 146px; width: 330px; max-height: 470px; overflow-y: auto; margin: 0; padding: 6px; list-style: none; background: #ffffff; border-radius: 14px; box-shadow: 0 10px 30px rgba(10,16,40,0.28); z-index: 5; }
+  #cityList li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  #cityList li small { font-weight: 500; color: var(--muted); font-size: 12px; }
+  #cityList li[aria-selected="true"] { background: #e8f0fd; color: #163a73; }
+  #cityList li.active, #cityList li:hover { background: #f1f3f6; }
+  #cityList li[aria-selected="true"].active, #cityList li[aria-selected="true"]:hover { background: #d8e6fc; }
+  #clockPanel { left: 50%; transform: translateX(-50%); width: 380px; padding: 10px 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .clock { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 190px; }
+  #dayLabel { font-size: 15px; font-weight: 600; color: #3b4252; }
+  #timeLabel { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 56px; line-height: 1; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .round { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+  .round:disabled { opacity: 0.3; cursor: default; }
+  #weatherPanel { right: 20px; width: 310px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+  #weatherPanel .wx-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  #weatherPanel .wx-text div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #fcLabel { font-size: 11px; font-weight: 600; color: #8a5a00; height: 15px; }
+  #tempLabel { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
+  #condLabel { font-size: 13px; font-weight: 600; color: #3b4252; }
+  #cloudLabel { font-size: 12px; color: #5b6272; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 18px; background: #fff; border-top: 1px solid #e3e5ea; }
+  .controls label, .controls .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .timeline { flex: 1 1 280px; min-width: 220px; }
+  .timeline input { width: 100%; accent-color: var(--ink); }
+  select { height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); font: inherit; font-size: 14px; color: var(--ink); background: #fff; }
+  #playBtn { width: 48px; height: 48px; border-radius: 999px; border: none; background: var(--ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+  .seg { display: flex; height: 36px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; padding: 0 12px; font: inherit; font-size: 14px; cursor: pointer; background: #fff; color: var(--ink); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .foot { margin: 0; padding: 8px 18px 12px; font-size: 11.5px; line-height: 1.5; color: #5b6272; background: #fff; border-radius: 0 0 14px 14px; }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="intro">
+    <h1>Swiss bike-share, hour by hour</h1>
+    <p>Docked bikes, bikes out and weather over the last days, replayed.</p>
+  </div>
+  <div id="stageWrap">
+    <div id="stage">
+      <canvas id="scene" width="1200" height="640" role="img" aria-label="Animated city scene"></canvas>
+      <div id="loading">Loading data…</div>
+
+      <div id="cityPanel" class="panel">
+        <button id="cityBtn" class="city-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="cityList">
+          <span class="city-row">
+            <span id="cityName">…</span>
+            <span class="chev" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 4.5 L6 8 L9.5 4.5" fill="none" stroke="#1d2230" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </span>
+          <span id="cityHint" class="city-hint">
+            <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 4.5 H11 M8.5 2 L11 4.5 L8.5 7 M12 9.5 H3 M5.5 7 L3 9.5 L5.5 12" fill="none" stroke="#2457a6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span id="hintText">Change city</span>
+          </span>
+        </button>
+        <div class="stats"><div><b id="dockedLabel">–</b> in docks</div><div><b id="outLabel">–</b> out (est.)</div></div>
+        <div class="legend"><span><i class="sw-line"></i><span id="legendToday">Out today</span></span><span><i class="sw-dash"></i>Yesterday</span></div>
+      </div>
+      <ul id="cityList" role="listbox" aria-label="Choose a city" tabindex="-1" hidden></ul>
+
+      <div id="clockPanel" class="panel">
+        <button id="prevDay" class="round" type="button" aria-label="Previous day"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11.5 3.5 L6 9 L11.5 14.5" fill="none" stroke="#1d2230" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="clock"><div id="dayLabel">–</div><div id="timeLabel">--:--</div></div>
+        <button id="nextDay" class="round" type="button" aria-label="Next day"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M6.5 3.5 L12 9 L6.5 14.5" fill="none" stroke="#1d2230" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+
+      <div id="weatherPanel" class="panel">
+        <svg id="wxIcon" width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"></svg>
+        <div class="wx-text"><div id="tempLabel">–</div><div id="condLabel">–</div><div id="cloudLabel">–</div><div id="fcLabel"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="playBtn" type="button" aria-label="Play"></button>
+    <label class="timeline"><span id="windowLabel">Timeline</span><input id="scrub" type="range" min="0" max="1" step="1" value="0"></label>
+    <label>Look back<select id="daysSel"><option value="1">Today</option><option value="3">3 days</option><option value="7" selected>7 days</option></select></label>
+    <label>Speed<select id="speedSel"><option value="0.25">0.25 s/h</option><option value="0.5">0.5 s/h</option><option value="1" selected>1 s/h</option><option value="2">2 s/h</option></select></label>
+    <div class="field"><span id="chartLbl">Chart shows</span><div class="seg" role="group" aria-labelledby="chartLbl"><button id="modeOut" type="button" aria-pressed="true">Bikes out</button><button id="modeDocked" type="button" aria-pressed="false">Bikes docked</button></div></div>
+    <label>Bikes<select id="styleSel"><option value="bikes" selected>Bikes only</option><option value="slate">Slate pastel</option><option value="red">Classic red</option><option value="teal">Deep teal</option><option value="hivis">Hi-vis commuter</option></select></label>
+  </div>
+  <p class="foot" id="foot"></p>
+</main>
+
+<script>
+/* Daily animation: plays gold_city_hour exports (data/cities.json + data/<city_id>.json).
+   All business logic (data status, imputation, bikes out, sun) comes from the pipeline; this page only draws. */
+(() => {
+  'use strict';
+  const W = 1200, H = 640, STREET = 470, X0 = 250, X1 = 1180, CH_TOP = 180, CH_BOT = 462;
+  const XW = X1 - X0;
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('scene'), ctx = canvas.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = W * dpr; canvas.height = H * dpr; ctx.scale(dpr, dpr);
+
+  // ---------- backgrounds (generated by the same code as the design canvas; chosen variant per city) ----------
+  const BG_PICK = { 'Zürich': ['zurich', 'A'], 'Genève': ['geneve', 'A'], 'Bern': ['bern', 'A'], 'Basel': ['basel', 'B'], 'Luzern': ['luzern', 'A'],
+    'Locarno': ['locarno', 'C'], 'Sion': ['sion', 'B'], 'Yverdon-les-Bains': ['yverdon', 'A'], 'Lugano': ['lugano', 'C'], 'Fribourg': ['fribourg', 'B'],
+    'Biel/Bienne': ['biel', 'A'], 'Neuchâtel': ['neuchatel', 'A'], 'Chur': ['chur', 'C'] };
+  function buildBackgrounds() {
+    const B = 470;
+    const f = (v) => Math.round(v * 10) / 10;
+    let seed = 11;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const R = (x, y, w, h, fill, op) => ({ isRect: true, x: f(x), y: f(y), w: f(w), h: f(h), fill: fill, op: op ?? 1 });
+    const P = (pts, fill, op) => ({ isPoly: true, pts: pts.map((p) => f(p[0]) + ',' + f(p[1])).join(' '), fill: fill, op: op ?? 1 });
+    const C = (cx, cy, r, fill, op) => ({ isCirc: true, cx: f(cx), cy: f(cy), r: f(r), fill: fill, op: op ?? 1 });
+    const E = (cx, cy, rx, ry, fill, op) => ({ isEll: true, cx: f(cx), cy: f(cy), rx: f(rx), ry: f(ry), fill: fill, op: op ?? 1 });
+    const D = (d, fill, stroke, sw, op) => ({ isPath: true, d: d, fill: fill || 'none', stroke: stroke || 'none', sw: sw || 0, op: op ?? 1 });
+
+    const SKY = '#d6eefb', SKY2 = '#f1f9fe', WIN = '#6b7385', STONE = '#ddd0b8', STONE2 = '#c9bba0';
+    const GREENR = '#4f8a6e', SAND = '#c0584a', LAKE = '#8cc6e3', LAKE2 = '#b3dbef', MTN = '#a7b8cc';
+    const HILL = '#a3c193', HILL2 = '#8db27f', TREE = '#6a9a5f', DARK = '#4a4f5c', SNOW = '#ffffff';
+    const WALLS = ['#efe3cf', '#e8d5bf', '#f3ead9', '#dfe6e9', '#eadccd', '#f1dcc4'];
+    const ROOFS = ['#b85c45', '#9c4f3e', '#c76d4f', '#8f5a44'];
+    const GREYROOFS = ['#6b7a8f', '#5f6b7d', '#7a8798'];
+    const YELLOW = ['#ecd496', '#e6c77d', '#f0dca8', '#dcb86a'];
+    const PASTEL = ['#f3d9a6', '#efc7a8', '#f5e6b8', '#e9d1c4', '#d9e4d0', '#f2cfa0'];
+
+    const sky = () => [R(0, 0, 1200, 470, SKY), R(0, 300, 1200, 170, SKY2, 0.7)];
+    const street = () => [];                                  // the page draws its own street
+    const mountains = (peaks, color, snow, base) => {
+      const s = [];
+      peaks.forEach((p) => {
+        const cx = p[0], top = p[1], half = p[2], b = base ?? B;
+        s.push(P([[cx - half, b], [cx, top], [cx + half, b]], color));
+        if (snow) {
+          const k = half * snow, d = (b - top) * snow;
+          s.push(P([[cx - k, top + d], [cx - k * 0.4, top + d * 0.72], [cx - k * 0.05, top + d], [cx + k * 0.35, top + d * 0.7], [cx + k, top + d], [cx, top]], SNOW));
+        }
+      });
+      return s;
+    };
+    const ridge = (pts, color, base) => [P([[pts[0][0], base ?? B]].concat(pts, [[pts[pts.length - 1][0], base ?? B]]), color)];
+    const lake = (y0, x0, x1) => {
+      const a = x0 ?? 0, b = x1 ?? 1200, s = [R(a, y0, b - a, B - y0, LAKE)];
+      for (let i = 0; i < 6; i++) s.push(R(a + 40 + ((i * 197) % Math.max(1, b - a - 120)), y0 + 12 + ((i * 23) % Math.max(1, B - y0 - 16)), 70, 2.5, LAKE2));
+      return s;
+    };
+    const houses = (x0, x1, hmin, hmax, o) => {
+      o = o || {};
+      const s = [], base = o.base ?? B, walls = o.walls || WALLS, roofs = o.roofs || ROOFS, roofH = o.roofH ?? 24;
+      let x = x0, k = 0;
+      while (x < x1 - 20) {
+        const w = Math.min(x1 - x, 40 + rnd() * 36), h = hmin + rnd() * (hmax - hmin), y = base - h;
+        s.push(R(x, y, w, h, walls[k % walls.length]));
+        if (o.flat) s.push(R(x - 2, y - 5, w + 4, 5, roofs[k % roofs.length]));
+        else s.push(P([[x - 3, y], [x + w / 2, y - roofH * (o.steep ? 1.8 : 1)], [x + w + 3, y]], roofs[k % roofs.length]));
+        const cols = Math.floor((w - 10) / 15), rows = Math.floor((h - 18) / 22);
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) s.push(R(x + 8 + c * 15 + (w - 10 - cols * 15) / 2, y + 10 + r * 22, 7, 10, WIN, 0.75));
+        x += w + 4; k++;
+      }
+      if (o.op !== undefined) s.forEach((sh) => { sh.op = o.op; });
+      return s;
+    };
+    const blocks = (x0, x1, hmin, hmax) => {
+      const s = [], cols = ['#d5d9de', '#c4cbd3', '#e1e4e8', '#b9c3cc'];
+      let x = x0, k = 0;
+      while (x < x1 - 20) {
+        const w = Math.min(x1 - x, 60 + rnd() * 50), h = hmin + rnd() * (hmax - hmin);
+        s.push(R(x, B - h, w, h, cols[k % 4]));
+        for (let yy = B - h + 10; yy < B - 12; yy += 16) s.push(R(x + 6, yy, w - 12, 5, '#8796a5', 0.5));
+        x += w + 6; k++;
+      }
+      return s;
+    };
+    const tower = (x, w, h, o) => {
+      o = o || {};
+      const base = o.base ?? B, col = o.color || STONE, top = base - h, s = [R(x, top, w, h, col)];
+      const tc = o.topColor || GREENR;
+      if (o.top === 'spire') s.push(P([[x - 3, top], [x + w / 2, top - (o.sh || w * 2.2)], [x + w + 3, top]], tc));
+      if (o.top === 'pyramid') s.push(P([[x - 3, top], [x + w / 2, top - (o.sh || w * 0.9)], [x + w + 3, top]], o.topColor || ROOFS[0]));
+      if (o.top === 'dome') { s.push(E(x + w / 2, top, w / 2 + 2, w * 0.42, o.topColor || DARK)); s.push(R(x + w / 2 - 2, top - w * 0.42 - 10, 4, 10, o.topColor || DARK)); }
+      if (o.top === 'flat') for (let i = 0; i < w; i += 12) s.push(R(x + i, top - 7, 7, 7, col));
+      if (o.clock) { s.push(C(x + w / 2, top + w * 0.6, w * 0.3, DARK)); s.push(C(x + w / 2, top + w * 0.6, w * 0.23, '#e8c25a')); }
+      if (h > 90) { s.push(R(x + w / 2 - 3, top + h * 0.45, 6, 15, WIN, 0.8)); s.push(R(x + w / 2 - 3, top + h * 0.68, 6, 15, WIN, 0.8)); }
+      return s;
+    };
+    const church = (x, w, h, o) => {
+      o = o || {};
+      const base = o.base ?? B;
+      return [R(x, base - h, w, h, o.color || STONE), P([[x - 4, base - h], [x + w / 2, base - h - (o.roofH || 34)], [x + w + 4, base - h]], o.roof || ROOFS[1])];
+    };
+    const bridgeStone = (x0, x1, deck, water, n, color) => {
+      const s = [R(x0, deck, x1 - x0, water - deck, color || STONE2), R(x0, deck - 5, x1 - x0, 5, '#8d806a')];
+      const span = (x1 - x0) / n;
+      for (let i = 0; i < n; i++) {
+        const a = x0 + i * span + span * 0.14, b = a + span * 0.72, r = (b - a) / 2;
+        s.push(D('M ' + f(a) + ' ' + water + ' A ' + f(r) + ' ' + f(Math.min(r, (water - deck) * 0.8)) + ' 0 0 1 ' + f(b) + ' ' + water + ' Z', LAKE));
+      }
+      return s;
+    };
+    const fountain = (x, base, top) => [
+      E(x - 14, top + 30, 12, 26, '#ffffff', 0.35), E(x + 14, top + 30, 12, 26, '#ffffff', 0.35),
+      P([[x - 5, base], [x - 1.5, top], [x + 1.5, top], [x + 5, base]], '#ffffff', 0.92), E(x, top, 16, 10, '#ffffff', 0.8)
+    ];
+    const palm = (x, base) => {
+      const tx = x + 4, ty = base - 82, s = [D('M ' + x + ' ' + base + ' Q ' + (x + 9) + ' ' + (base - 42) + ' ' + tx + ' ' + ty, 'none', '#7a5a3a', 6)];
+      [[-40, 12], [40, 12], [-28, 26], [28, 26], [-10, -18], [12, -16]].forEach((p) => s.push(D('M ' + tx + ' ' + ty + ' Q ' + (tx + p[0] / 2) + ' ' + (ty - 14) + ' ' + (tx + p[0]) + ' ' + (ty + p[1]), 'none', '#4f8a4a', 6)));
+      return s;
+    };
+    const tree = (x, base, r) => [R(x - 3, base - r * 0.9, 6, r * 0.9, '#7a5a3a'), C(x, base - r * 1.4, r, TREE)];
+    const trees = (x0, x1, step, base, r) => { let s = []; for (let x = x0; x <= x1; x += step) s = s.concat(tree(x, base, r)); return s; };
+    const boat = (x, y) => [P([[x - 20, y], [x + 20, y], [x + 13, y + 7], [x - 13, y + 7]], '#ffffff'), P([[x, y - 2], [x, y - 38], [x + 17, y - 4]], '#ffffff', 0.95)];
+    const steamer = (x, y) => [P([[x - 70, y], [x + 70, y], [x + 58, y + 14], [x - 58, y + 14]], '#ffffff'), R(x - 50, y - 18, 100, 18, '#f3f4f6'), R(x - 6, y - 36, 12, 18, '#c8102e'), R(x - 70, y - 3, 140, 3, '#2f6f8f')];
+    const castle = (x, w, h, base) => {
+      const b = base ?? B, s = [R(x, b - h, w, h, STONE)];
+      for (let i = 0; i < w; i += 14) s.push(R(x + i, b - h - 8, 8, 8, STONE));
+      [x - 16, x + w - 12].forEach((tx) => { s.push(R(tx, b - h - 26, 28, h + 26, STONE2)); s.push(P([[tx - 4, b - h - 26], [tx + 14, b - h - 68], [tx + 32, b - h - 26]], ROOFS[0])); });
+      s.push(R(x + w / 2 - 14, b - 40, 28, 40, '#6b5a48'));
+      return s;
+    };
+    const glassTower = (x, w, h) => { const s = [R(x, B - h, w, h, '#7fa6b5')]; for (let i = 6; i < w - 4; i += 12) s.push(R(x + i, B - h, 4, h, '#a9c9d4', 0.75)); return s; };
+    const stepped = (x, w, h, steps) => { const s = []; for (let i = 0; i < steps; i++) { s.push(R(x, B - h * (i + 1) / steps, w * (1 - i * 0.11), h / steps, '#f5f6f7')); s.push(R(x, B - h * (i + 1) / steps, w * (1 - i * 0.11), 3, '#c3cad1')); } return s; };
+    const stepped2 = (x, w, h, steps, side, base) => {
+      const s = [], b = base ?? B;
+      for (let i = 0; i < steps; i++) {
+        const ww = w * (1 - i * 0.06), xx = side === 'left' ? x + (w - ww) : x, hh = h / steps, y = b - hh * (i + 1);
+        s.push(R(xx, y, ww, hh + 0.5, '#f6f7f8'));
+        s.push(R(side === 'left' ? xx : xx + ww - 12, y, 12, hh + 0.5, '#dde2e7'));
+        for (let k = y + 4; k < y + hh - 1; k += 7) s.push(R(xx, k, ww, 1.4, '#c5ccd4'));
+      }
+      return s;
+    };
+    const vineyardSlope = (pts, d0, d1, step) => {
+      const s = [];
+      for (let d = d0; d <= d1; d += step) s.push(D('M ' + pts.map((p) => p[0] + ' ' + (p[1] + d)).join(' L '), 'none', '#6f9a5a', 3, 0.8));
+      return s;
+    };
+    const arcade = (x0, x1, hmin, hmax, colors, base) => {
+      const s = [], b = base ?? B;
+      let x = x0, k = 0;
+      while (x < x1 - 20) {
+        const w = 62, h = hmin + rnd() * (hmax - hmin), y = b - h;
+        s.push(R(x, y, w, h, colors[k % colors.length]));
+        s.push(P([[x - 2, y], [x + w / 2, y - 16], [x + w + 2, y]], ROOFS[k % 4]));
+        for (let r = 0; r < Math.floor((h - 50) / 22); r++) for (let c = 0; c < 3; c++) s.push(R(x + 9 + c * 17, y + 10 + r * 22, 8, 11, WIN, 0.75));
+        s.push(D('M ' + (x + 8) + ' ' + b + ' L ' + (x + 8) + ' ' + (b - 20) + ' A 23 18 0 0 1 ' + (x + 54) + ' ' + (b - 20) + ' L ' + (x + 54) + ' ' + b + ' Z', '#5b6475', 'none', 0, 0.85));
+        x += w + 2; k++;
+      }
+      return s;
+    };
+    const coveredBridge = (x0, x1, y) => {
+      const s = [];
+      for (let x = x0 + 10; x < x1; x += 46) s.push(R(x, y, 5, B - y, '#6b5a48'));
+      s.push(R(x0, y - 4, x1 - x0, 8, '#7a5a3a'));
+      for (let x = x0; x < x1; x += 22) s.push(R(x, y - 26, 3, 22, '#7a5a3a'));
+      s.push(P([[x0 - 6, y - 24], [x1 + 6, y - 24], [x1, y - 38], [x0, y - 38]], '#8f4b32'));
+      for (let x = x0 + 8; x < x1; x += 18) s.push(C(x, y - 6, 3.5, '#d62828'));
+      return s;
+    };
+    const train = (x, y) => { let s = []; for (let i = 0; i < 3; i++) { const cx = x + i * 92; s.push(R(cx, y - 34, 88, 30, '#c8102e')); for (let j = 0; j < 4; j++) s.push(R(cx + 8 + j * 20, y - 28, 13, 11, '#dfe6e9')); s.push(C(cx + 18, y - 3, 6, '#2b2e35')); s.push(C(cx + 70, y - 3, 6, '#2b2e35')); } return s; };
+    const vineyard = (x0, x1, yTop, yBot) => { const s = []; for (let y = yTop + 10; y < yBot; y += 14) s.push(D('M ' + x0 + ' ' + y + ' L ' + x1 + ' ' + (y + 30), 'none', '#6f9a5a', 3, 0.8)); return s; };
+    const cliff = (pts, color) => [P(pts, color)];
+
+    const cat = (...parts) => parts.reduce((a, p) => a.concat(p), []);
+    const V = (code, name, desc, build) => ({ code: code, name: name, desc: desc, build: build });
+
+    const cities = [
+      { name: 'Zürich', variants: [
+        V('A', 'Old town towers', 'St. Peter clock, Fraumünster spire, Grossmünster twin towers, Uetliberg behind (current preview).', () => cat(sky(),
+          ridge([[0, 300], [150, 240], [300, 214], [420, 230], [560, 256], [700, 288], [900, 280], [1030, 274], [1200, 268]], HILL),
+          ridge([[0, 326], [200, 296], [400, 284], [700, 312], [1000, 306], [1200, 300]], HILL2),
+          [R(298, 136, 4, 80, '#8a8f99'), R(290, 152, 20, 3, '#8a8f99'), R(292, 168, 16, 3, '#8a8f99')],
+          houses(0, 1200, 95, 140, { base: 440, walls: ['#f6efe4', '#f1e8da', '#f3ece2'], roofs: ['#dba08b', '#d3937c'], op: 0.75 }),
+          houses(0, 220, 80, 130, { base: 440 }),
+          tower(232, 48, 232, { base: 440, top: 'spire', sh: 56, clock: true, color: '#efe3cc' }), church(280, 82, 72, { base: 440 }),
+          trees(380, 450, 34, 440, 15),
+          tower(468, 30, 218, { base: 440, top: 'spire', sh: 112, color: '#e6dccb' }), church(498, 100, 86, { base: 440, color: '#efe5d3', roof: '#4f7d6a', roofH: 30 }),
+          R(626, 350, 164, 90, '#efe5d3'), P([[620, 350], [708, 318], [796, 350]], '#8f5a44'),
+          tower(640, 46, 232, { base: 440, top: 'dome', color: '#e8dcc5' }), tower(726, 46, 232, { base: 440, top: 'dome', color: '#e8dcc5' }),
+          [C(663, 236, 11, DARK), C(663, 236, 8, '#e8c25a'), C(749, 236, 11, DARK), C(749, 236, 8, '#e8c25a'), R(690, 390, 32, 50, '#6b5a48')],
+          houses(800, 1200, 90, 140, { base: 440 }),
+          [R(0, 436, 1200, 6, '#bfb3a0')], lake(442), boat(560, 452), street())),
+        V('B', 'Lake and Alps', 'Lake Zürich with the Glarus Alps on the horizon, Grossmünster small on the shore, sailboats.', () => cat(sky(),
+          mountains([[180, 255, 170], [400, 222, 190], [620, 246, 160], [850, 208, 200], [1080, 250, 170]], MTN, 0.26, 362),
+          [R(0, 350, 1200, 14, HILL2)], tower(560, 18, 70, { base: 352, top: 'dome' }), tower(586, 18, 70, { base: 352, top: 'dome' }),
+          lake(362), boat(300, 410), boat(760, 430), boat(980, 400), houses(0, 190, 70, 120), houses(1010, 1200, 70, 120), trees(230, 970, 74, B, 16), street())),
+        V('C', 'Prime Tower and Hardbrücke', 'Modern Zürich West: Prime Tower, the elevated Hardbrücke, Uetliberg with its TV tower.', () => cat(sky(),
+          ridge([[0, 330], [200, 290], [380, 300], [560, 340], [800, 360], [1200, 365]], HILL), [R(198, 215, 4, 80, '#8a8f99'), R(190, 228, 20, 3, '#8a8f99')],
+          blocks(0, 700, 70, 150), glassTower(740, 84, 330), blocks(850, 1200, 60, 140),
+          [R(0, 392, 1200, 13, '#9aa1ad')], (() => { const s = []; for (let x = 40; x < 1200; x += 140) s.push(R(x, 405, 12, 65, '#8a919c')); return s; })(), street()))
+      ] },
+      { name: 'Genève', variants: [
+        V('A', "Jet d'Eau", "The lake fountain against the Salève, Mont Blanc faint behind, grey Geneva roofs.", () => cat(sky(),
+          mountains([[930, 226, 210]], '#c7d3df', 0.38, 372),
+          ridge([[0, 374], [100, 336], [260, 300], [420, 288], [560, 296], [680, 318], [780, 352], [900, 368], [1200, 376]], '#9cae9a'),
+          [P([[262, 300], [420, 288], [432, 330], [276, 342]], '#b9c5b2')],
+          [R(0, 388, 1200, 9, '#8fae86')],
+          tower(983, 14, 46, { base: 390, top: 'flat', color: STONE2 }), tower(1013, 14, 46, { base: 390, top: 'flat', color: STONE2 }),
+          tower(998, 8, 52, { base: 390, top: 'spire', sh: 22, color: STONE2, topColor: '#6f9b8a' }),
+          lake(396),
+          [E(612, 128, 26, 14, '#ffffff', 0.8), E(638, 152, 30, 20, '#ffffff', 0.45), E(664, 188, 28, 26, '#ffffff', 0.3), E(684, 232, 24, 30, '#ffffff', 0.2),
+           P([[594, 414], [598, 118], [602, 118], [606, 414]], '#ffffff', 0.92), E(600, 120, 10, 8, '#ffffff', 0.9), E(600, 414, 34, 8, '#ffffff', 0.7)],
+          [R(700, 420, 250, 6, '#bfb3a0'), R(944, 382, 12, 38, '#f3f4f6'), P([[940, 382], [950, 368], [960, 382]], '#c8102e'), C(950, 390, 3, '#e8c25a')],
+          boat(300, 438), boat(470, 424), boat(820, 446),
+          [D('M 200 150 q 8 -8 16 0 q 8 -8 16 0', 'none', DARK, 2), D('M 260 120 q 6 -6 12 0 q 6 -6 12 0', 'none', DARK, 2), D('M 820 140 q 8 -8 16 0 q 8 -8 16 0', 'none', DARK, 2)],
+          houses(0, 330, 140, 190, { roofs: GREYROOFS, roofH: 16, walls: ['#f1ebe0', '#ece4d6', '#f4efe6'] }),
+          houses(990, 1200, 120, 170, { roofs: GREYROOFS, roofH: 16, walls: ['#f1ebe0', '#ece4d6', '#f4efe6'] }),
+          [R(330, 462, 660, 8, '#bfb3a0')], trees(380, 960, 96, 464, 14), street())),
+        V('B', 'Cathédrale Saint-Pierre', 'Old town on its hill: the cathedral with two square towers and the green spire between them.', () => cat(sky(),
+          ridge([[0, 400], [300, 360], [600, 345], [900, 360], [1200, 400]], HILL2), houses(0, 500, 90, 150, { roofs: GREYROOFS }),
+          tower(520, 52, 240, { top: 'flat' }), tower(650, 52, 240, { top: 'flat' }), tower(594, 32, 260, { top: 'spire', sh: 84, color: '#d4c6ad', topColor: '#6f9b8a' }),
+          R(545, 395, 130, 75, STONE), P([[538, 395], [610, 365], [682, 395]], STONE2), houses(720, 1200, 90, 150, { roofs: GREYROOFS }), street())),
+        V('C', 'Mont Blanc across the lake', 'The big view: Mont Blanc massif filling the sky, lake and quay with plane trees.', () => cat(sky(),
+          mountains([[380, 230, 240], [620, 160, 330], [900, 215, 260]], '#bccad8', 0.4, 380), lake(380), fountain(240, 380, 230),
+          boat(700, 420), trees(40, 1160, 90, B, 18), street()))
+      ] },
+      { name: 'Bern', variants: [
+        V('A', 'Zytglogge', 'The clock tower over the arcaded old-town lanes.', () => cat(sky(),
+          arcade(0, 520, 110, 160, WALLS), tower(540, 74, 240, { top: 'pyramid', clock: true, color: '#e3d3b6', topColor: '#8f4b32', sh: 70 }),
+          tower(570, 14, 24, { base: 160, top: 'spire', sh: 30, color: '#e3d3b6', topColor: '#8f4b32' }), arcade(630, 1200, 110, 160, WALLS), street())),
+        V('B', 'Münster above the Aare', 'The tall Münster spire over the old town terrace, Aare river below.', () => cat(sky(),
+          lake(420), houses(0, 560, 70, 120, { base: 420 }), tower(580, 60, 290, { base: 420, top: 'spire', sh: 64, color: '#cdbf9f', topColor: '#a89a7c' }),
+          church(640, 140, 70, { base: 420, color: '#cdbf9f' }), houses(800, 1200, 70, 120, { base: 420 }), (() => { const s = []; for (let x = 0; x < 1200; x += 120) s.push(R(x, 420, 6, 50, STONE2)); return s; })(), street())),
+        V('C', 'Bundeshaus and Alps', 'Federal Palace with its green dome, Bernese Alps on the horizon.', () => cat(sky(),
+          mountains([[180, 240, 160], [400, 210, 180], [640, 228, 170], [880, 205, 190], [1090, 238, 160]], MTN, 0.3, 360),
+          [R(0, 350, 1200, 20, HILL2)], R(370, 330, 460, 140, '#e6dccb'), P([[362, 330], [430, 300], [770, 300], [838, 330]], '#6f9b8a'),
+          E(600, 300, 70, 62, '#6f9b8a'), R(596, 228, 8, 14, '#6f9b8a'), (() => { const s = []; for (let x = 390; x < 820; x += 30) s.push(R(x, 350, 12, 26, WIN, 0.7)); return s; })(),
+          trees(40, 330, 70, B, 18), trees(870, 1160, 70, B, 18), street()))
+      ] },
+      { name: 'Basel', variants: [
+        V('A', 'Münster on the Rhine', 'Red sandstone cathedral with twin spires and a tiled roof, high above the Rhine.', () => cat(sky(),
+          lake(400), houses(0, 440, 80, 140, { base: 400 }), R(470, 300, 260, 100, SAND), tower(475, 46, 200, { base: 400, top: 'spire', sh: 70, color: SAND, topColor: '#8a3a30' }),
+          tower(684, 46, 200, { base: 400, top: 'spire', sh: 70, color: SAND, topColor: '#8a3a30' }),
+          P([[521, 300], [600, 255], [684, 300]], '#d9a441'), P([[560, 300], [600, 270], [640, 300]], '#3f7f5f'), houses(760, 1200, 80, 140, { base: 400 }), boat(600, 440), street())),
+        V('B', 'Roche Towers', 'The two stepped white towers over the Rhine, Münster spires and Black Forest hills behind, a cable ferry.', () => cat(sky(),
+          ridge([[0, 360], [250, 330], [550, 345], [850, 318], [1200, 338]], '#a7b9ac'),
+          houses(0, 1200, 60, 110, { base: 430, walls: ['#f6efe4', '#f1e8da'], roofs: ['#dba08b', '#d3937c'], op: 0.7 }),
+          R(140, 360, 70, 70, SAND), tower(130, 22, 120, { base: 430, top: 'spire', sh: 44, color: SAND, topColor: '#8a3a30' }), tower(198, 22, 120, { base: 430, top: 'spire', sh: 44, color: SAND, topColor: '#8a3a30' }),
+          houses(240, 600, 70, 110, { base: 430 }),
+          stepped2(630, 130, 330, 12, 'right', 430), stepped2(800, 120, 395, 14, 'left', 430),
+          houses(950, 1200, 70, 110, { base: 430 }),
+          [R(0, 426, 1200, 6, '#bfb3a0')], lake(432), [D('M 0 438 L 1200 438', 'none', '#5b6475', 1.5, 0.8), D('M 520 438 L 520 452', 'none', '#5b6475', 1.5)],
+          P([[496, 452], [544, 452], [536, 462], [504, 462]], '#7a5a3a'), R(508, 446, 24, 6, '#f3f4f6'), street())),
+        V('C', 'Mittlere Brücke', 'The old stone bridge with its little chapel, Grossbasel rooftops behind.', () => cat(sky(),
+          houses(0, 1200, 70, 130, { base: 360 }), lake(360), bridgeStone(60, 1140, 360, 430, 6), tower(586, 28, 40, { base: 355, top: 'spire', sh: 34 }), street()))
+      ] },
+      { name: 'Luzern', variants: [
+        V('A', 'Kapellbrücke', 'The covered wooden bridge with flower boxes and the octagonal water tower, Pilatus behind.', () => cat(sky(),
+          mountains([[240, 200, 210], [380, 178, 120], [480, 225, 110]], '#8fa3ba', 0.18, 390), lake(390),
+          houses(0, 160, 80, 130, { base: 390 }), houses(900, 1200, 80, 130, { base: 390 }), coveredBridge(0, 1200, 410),
+          tower(660, 48, 120, { base: 420, top: 'pyramid', color: STONE2, topColor: '#8f4b32', sh: 44 }), street())),
+        V('B', 'Pilatus over the lake', 'The jagged Pilatus massif over Lake Lucerne, a paddle steamer on the water.', () => cat(sky(),
+          mountains([[300, 150, 280], [460, 120, 170], [600, 175, 200], [820, 230, 260]], '#8fa3ba', 0.2, 380), lake(380),
+          steamer(640, 420), trees(40, 300, 70, B, 16), trees(980, 1160, 70, B, 16), street())),
+        V('C', 'Musegg Wall', 'The medieval wall with its nine towers along the hill above the old town.', () => cat(sky(),
+          ridge([[0, 340], [300, 300], [700, 296], [1000, 320], [1200, 345]], HILL), [R(80, 306, 1040, 22, STONE)],
+          [150, 300, 450, 600, 750, 900, 1050].reduce((a, x, i) => a.concat(tower(x, 34, 70 + (i % 3) * 18, { base: 330, top: 'pyramid', color: STONE2, topColor: ROOFS[i % 4], sh: 34 })), []),
+          houses(0, 1200, 60, 110), street()))
+      ] },
+      { name: 'Locarno', variants: [
+        V('A', 'Lake Maggiore', 'Green mountains around the lake, palm-lined promenade.', () => cat(sky(),
+          mountains([[150, 230, 230], [460, 195, 270], [800, 215, 270], [1090, 240, 210]], '#7f9fae', 0, 372), lake(372),
+          boat(380, 410), boat(860, 430), (() => { let s = []; for (let x = 70; x < 1200; x += 165) s = s.concat(palm(x, B)); return s; })(), street())),
+        V('B', 'Madonna del Sasso', 'The yellow sanctuary on its wooded rock above the town.', () => cat(sky(),
+          mountains([[250, 220, 260], [950, 230, 280]], '#9cb2bd', 0, 470),
+          P([[300, 470], [450, 330], [520, 270], [640, 262], [760, 320], [880, 470]], '#6f9a5f'), church(520, 120, 46, { base: 270, color: '#e8c35a', roof: '#b8634a', roofH: 22 }),
+          tower(640, 24, 84, { base: 270, top: 'pyramid', color: '#e8c35a', sh: 26 }), houses(0, 300, 60, 110, { walls: PASTEL }), houses(880, 1200, 60, 110, { walls: PASTEL }), street())),
+        V('C', 'Piazza Grande', 'Pastel arcaded houses around the big square, mountains behind.', () => cat(sky(),
+          mountains([[200, 230, 260], [600, 205, 300], [1000, 225, 280]], '#9cb2bd', 0, 470), arcade(0, 1200, 120, 170, PASTEL), street()))
+      ] },
+      { name: 'Sion', variants: [
+        V('A', 'Valère and Tourbillon', 'The two castle hills: Valère basilica on one, Tourbillon ruins on the other, Alps behind.', () => cat(sky(),
+          mountains([[150, 220, 200], [450, 200, 230], [800, 210, 240], [1080, 230, 200]], MTN, 0.28, 470),
+          P([[180, 470], [320, 270], [420, 250], [520, 300], [600, 470]], '#a8a27c'), P([[620, 470], [750, 250], [860, 228], [980, 300], [1060, 470]], '#9d9774'),
+          church(330, 90, 46, { base: 256, roofH: 22 }), tower(412, 26, 66, { base: 256, top: 'pyramid', sh: 26 }), R(760, 198, 100, 36, STONE2),
+          (() => { const s = []; for (let x = 760; x < 860; x += 14) s.push(R(x, 190, 8, 8, STONE2)); return s; })(), tower(842, 26, 64, { base: 234, top: 'flat', color: STONE2 }),
+          houses(0, 200, 50, 90), houses(1060, 1200, 50, 90), houses(600, 640, 50, 80), street())),
+        V('B', 'Vineyards', 'Terraced vineyards on the valley slope, snowy Alps across the Rhône valley.', () => cat(sky(),
+          mountains([[700, 190, 260], [980, 215, 240]], MTN, 0.3, 470), P([[0, 470], [0, 240], [520, 300], [1200, 430], [1200, 470]], '#8fb36e'),
+          vineyardSlope([[0, 240], [520, 300], [1200, 430]], 14, 230, 14), church(300, 50, 30, { base: 290, roofH: 18 }), tower(350, 16, 40, { base: 290, top: 'spire', sh: 22 }), houses(760, 1200, 50, 90), street())),
+        V('C', 'Cathedral and Alps', 'Romanesque cathedral tower among old-town houses, peaks behind.', () => cat(sky(),
+          mountains([[200, 215, 230], [520, 190, 260], [880, 210, 260]], MTN, 0.3, 470), houses(0, 540, 70, 120),
+          tower(560, 62, 220, { top: 'pyramid', color: '#d8cbb0', topColor: '#8f5a44', sh: 60 }), church(622, 150, 80), houses(800, 1200, 70, 120), street()))
+      ] },
+      { name: 'Yverdon-les-Bains', variants: [
+        V('A', 'Château', 'The square castle with four round towers in the middle of town.', () => cat(sky(),
+          ridge([[0, 360], [400, 330], [800, 335], [1200, 350]], '#9fb5a6'), houses(0, 460, 70, 110), castle(500, 200, 120), houses(760, 1200, 70, 110), street())),
+        V('B', 'Lake Neuchâtel', 'The wide lake with the low Jura ridge across, reeds and boats.', () => cat(sky(),
+          ridge([[0, 340], [300, 320], [700, 315], [1200, 335]], '#8aa59a', 380), lake(380), boat(360, 420), boat(700, 405), boat(980, 435),
+          trees(30, 300, 60, B, 14), trees(900, 1170, 60, B, 14), street())),
+        V('C', 'Jura and old town', 'Old-town houses under the long Jura ridge, the church with its rounded bell tower.', () => cat(sky(),
+          ridge([[0, 330], [300, 290], [700, 280], [1200, 320]], '#87a08f'), houses(0, 540, 80, 120), tower(560, 50, 170, { top: 'dome', topColor: '#7a6a5a' }),
+          church(610, 120, 90, { color: '#efe3cf' }), houses(760, 1200, 80, 120), street()))
+      ] },
+      { name: 'Lugano', variants: [
+        V('A', 'Lake and San Salvatore', 'The cone of Monte San Salvatore over the lake, Monte Brè on the right.', () => cat(sky(),
+          mountains([[330, 160, 220]], '#6f9a7a', 0, 380), ridge([[640, 380], [800, 280], [960, 245], [1120, 270], [1200, 300]], '#7aa28a', 380),
+          lake(380), boat(520, 420), boat(880, 430), (() => { let s = []; for (let x = 60; x < 1200; x += 190) s = s.concat(palm(x, B)); return s; })(), street())),
+        V('B', 'Cattedrale San Lorenzo', 'The white Renaissance façade with its rose window and the bell tower.', () => cat(sky(),
+          ridge([[0, 330], [400, 280], [800, 300], [1200, 340]], '#7aa28a'), houses(0, 460, 80, 130, { walls: PASTEL }),
+          R(480, 250, 240, 220, '#f3eee2'), P([[470, 250], [600, 200], [730, 250]], '#e6dfcf'), C(600, 305, 26, '#c9b98f'), C(600, 305, 16, '#f3eee2'),
+          R(580, 400, 40, 70, '#6b5a48'), tower(740, 40, 250, { top: 'pyramid', color: '#efe7d6', sh: 34 }), houses(800, 1200, 80, 130, { walls: PASTEL }), street())),
+        V('C', 'Lakeside promenade', 'Pastel lakeside houses across the water, palms on the quay.', () => cat(sky(),
+          mountains([[250, 210, 260], [800, 200, 330]], '#7aa28a', 0, 340), houses(0, 1200, 50, 90, { base: 360, walls: PASTEL }), lake(360),
+          (() => { let s = []; for (let x = 80; x < 1200; x += 210) s = s.concat(palm(x, B)); return s; })(), street()))
+      ] },
+      { name: 'Fribourg', variants: [
+        V('A', 'Cathédrale Saint-Nicolas', 'The tall Gothic cathedral tower over the old town.', () => cat(sky(),
+          houses(0, 540, 80, 140), tower(560, 72, 280, { top: 'flat', color: '#bfb39a' }), church(632, 140, 90, { color: '#cfc3aa' }), houses(800, 1200, 80, 140), street())),
+        V('B', 'Sarine gorge and Poya bridge', 'The river deep in its gorge, the cable-stayed Poya bridge across.', () => cat(sky(),
+          cliff([[0, 470], [0, 300], [380, 310], [470, 470]], '#b9b08f'), cliff([[730, 470], [820, 300], [1200, 290], [1200, 470]], '#b9b08f'), lake(430, 430, 780),
+          [R(0, 296, 1200, 10, '#d0d4da'), R(440, 170, 12, 126, '#c4cad1'), R(748, 170, 12, 126, '#c4cad1')],
+          (() => { const s = []; [446, 754].forEach((px) => { for (let d = 30; d <= 150; d += 30) { s.push(D('M ' + px + ' 175 L ' + (px - d) + ' 296', 'none', '#aeb6bf', 2)); s.push(D('M ' + px + ' 175 L ' + (px + d) + ' 296', 'none', '#aeb6bf', 2)); } }); return s; })(),
+          houses(0, 360, 50, 90, { base: 300 }), houses(830, 1200, 50, 90, { base: 290 }), street())),
+        V('C', 'Old town on the cliff', 'Houses on the sandstone cliff above the Sarine, the funicular climbing to the upper town.', () => cat(sky(),
+          cliff([[0, 470], [0, 320], [520, 320], [580, 470]], '#b9b08f'), houses(0, 500, 60, 110, { base: 320 }), lake(440, 560, 1200),
+          D('M 640 470 L 1080 300', 'none', DARK, 4), P([[830, 395], [880, 375], [885, 395], [835, 415]], '#2f6fd6'), houses(1000, 1200, 60, 110, { base: 300 }), street()))
+      ] },
+      { name: 'Biel/Bienne', variants: [
+        V('A', 'Lake Biel and Jura', 'The forested Jura slope with vineyards and wine villages above the lake, old town on the shore.', () => cat(sky(),
+          ridge([[0, 250], [400, 230], [800, 250], [1200, 270]], '#6f8f74', 392), P([[0, 392], [0, 330], [1200, 360], [1200, 392]], '#8fb36e'),
+          vineyardSlope([[0, 330], [1200, 360]], 10, 60, 12),
+          houses(640, 820, 26, 40, { base: 384, roofH: 14 }), tower(830, 12, 46, { base: 384, top: 'spire', sh: 20, color: STONE }), houses(850, 960, 26, 40, { base: 386, roofH: 14 }),
+          lake(392), boat(560, 430), boat(900, 442),
+          houses(0, 420, 60, 110, { base: 470 }), tower(150, 28, 150, { top: 'spire', sh: 50, color: '#e8dcc5' }), trees(440, 520, 40, B, 14), street())),
+        V('B', 'Old town Ring', 'Steep-roofed old-town houses around the square with the Banneret fountain.', () => cat(sky(),
+          houses(0, 1200, 110, 160, { steep: true }), R(592, 380, 16, 90, STONE2), C(600, 372, 10, '#2f6fd6'), R(570, 455, 60, 15, STONE), street())),
+        V('C', 'Watch town', 'Modern lakeside watch-industry buildings with a curved timber façade.', () => cat(sky(),
+          ridge([[0, 300], [600, 280], [1200, 300]], '#6f8f74'), blocks(0, 380, 60, 140),
+          D('M 400 470 Q 600 230 800 470 Z', '#c8a27a'), (() => { const s = []; for (let x = 430; x < 780; x += 30) s.push(D('M ' + x + ' 470 L ' + (x + 30) + ' 330', 'none', '#a8835c', 2)); return s; })(),
+          blocks(820, 1200, 60, 140), street()))
+      ] },
+      { name: 'Neuchâtel', variants: [
+        V('A', 'Collégiale and Château', 'The collegiate church and the castle on the hill above yellow sandstone houses.', () => cat(sky(),
+          P([[300, 470], [420, 330], [880, 320], [1000, 470]], HILL2), church(520, 180, 70, { base: 330, color: '#e3cf98' }),
+          tower(512, 40, 120, { base: 330, top: 'spire', sh: 64, color: '#e3cf98' }), tower(668, 40, 104, { base: 330, top: 'pyramid', color: '#e3cf98', sh: 40 }),
+          R(730, 280, 150, 50, '#e8cf8f'), P([[724, 280], [805, 254], [886, 280]], ROOFS[0]), houses(0, 320, 70, 120, { walls: YELLOW }), houses(980, 1200, 70, 120, { walls: YELLOW }),
+          houses(330, 980, 50, 80, { walls: YELLOW }), street())),
+        V('B', 'Lake and Alps panorama', 'The long lake with the whole Alpine chain far on the horizon.', () => cat(sky(),
+          mountains([[100, 300, 120], [260, 285, 130], [430, 295, 120], [600, 278, 140], [780, 290, 130], [960, 282, 140], [1130, 296, 120]], '#b7c6d6', 0.35, 362),
+          lake(362), boat(300, 410), boat(640, 400), boat(980, 425), trees(30, 1170, 95, B, 14), street())),
+        V('C', 'Yellow old town', 'The "butter-coloured" sandstone houses and a fountain column.', () => cat(sky(),
+          houses(0, 1200, 110, 170, { walls: YELLOW }), R(593, 380, 14, 90, '#e3cf98'), C(600, 372, 10, '#c8102e'), R(570, 455, 60, 15, STONE), street()))
+      ] },
+      { name: 'Chur', variants: [
+        V('A', 'Calanda and old town', 'The Calanda massif over the old town and the green spire of St. Martin.', () => cat(sky(),
+          mountains([[320, 140, 400], [880, 220, 300]], '#8b9fb2', 0.25, 470), houses(0, 660, 80, 130), tower(680, 42, 220, { top: 'spire', sh: 80, color: '#e8dcc5' }),
+          houses(740, 1200, 80, 130), street())),
+        V('B', 'Cathedral hill', 'The cathedral and bishop’s court on their terrace above the town.', () => cat(sky(),
+          mountains([[200, 200, 300], [900, 190, 330]], '#8b9fb2', 0.25, 470), P([[300, 470], [380, 330], [900, 320], [980, 470]], HILL2),
+          church(470, 200, 60, { base: 330 }), tower(440, 38, 120, { base: 330, top: 'spire', sh: 60, color: STONE }), R(700, 280, 150, 50, '#efe3cf'),
+          P([[694, 280], [775, 256], [856, 280]], ROOFS[2]), houses(0, 330, 60, 110), houses(960, 1200, 60, 110), street())),
+        V('C', 'Rhaetian Railway', 'The red mountain train passing below the peaks.', () => cat(sky(),
+          mountains([[250, 170, 320], [700, 200, 300], [1050, 180, 260]], '#8b9fb2', 0.28, 470), houses(0, 1200, 50, 90, { base: 420 }),
+          [R(0, 420, 1200, 50, '#a59a85'), R(0, 438, 1200, 3, '#5b5f68')], train(380, 440), street()))
+      ] }
+    ];
+
+
+    const out = {};
+    cities.forEach((c) => c.variants.forEach((v) => {            // build all in board order so the random houses match the board
+      const shapes = v.build();
+      const pick = BG_PICK[c.name];
+      if (pick && pick[1] === v.code) out[pick[0]] = shapes;
+    }));
+    return out;
+  }
+  const BG = buildBackgrounds();
+  const bgCache = {};
+  const WIN_FILL = '#6b7385';
+  function shapePath(o, s) {                                     // fill (and stroke) one background shape on context o
+    if (s.isRect) { o.fillRect(s.x, s.y, s.w, s.h); return; }
+    if (s.isPoly) { const p = s.pts.split(' ').map((q) => q.split(',').map(Number)); o.beginPath(); p.forEach((q, i) => (i ? o.lineTo(q[0], q[1]) : o.moveTo(q[0], q[1]))); o.closePath(); o.fill(); return; }
+    if (s.isCirc) { o.beginPath(); o.arc(s.cx, s.cy, s.r, 0, Math.PI * 2); o.fill(); return; }
+    if (s.isEll) { o.beginPath(); o.ellipse(s.cx, s.cy, s.rx, s.ry, 0, 0, Math.PI * 2); o.fill(); return; }
+    if (s.isPath) { const p = new Path2D(s.d); if (s.fill && s.fill !== 'none') o.fill(p); if (s.stroke && s.stroke !== 'none') { o.lineWidth = s.sw; o.lineCap = 'round'; o.lineJoin = 'round'; o.stroke(p); } }
+  }
+  function skylineFor(cityId) {
+    if (bgCache[cityId]) return bgCache[cityId];
+    const shapes = (BG[cityId] || BG.zurich).filter((s) => !(s.isRect && s.x === 0 && s.w === 1200 && s.h >= 170));   // drop sky bands; the page draws a live sky
+    const mk = () => { const c = document.createElement('canvas'); c.width = W * dpr; c.height = STREET * dpr; const x = c.getContext('2d'); x.scale(dpr, dpr); return [c, x]; };
+    const [img, o] = mk();                                        // day picture, drawn in the board's order
+    shapes.forEach((s) => { o.globalAlpha = s.op ?? 1; o.fillStyle = s.fill; o.strokeStyle = s.stroke || s.fill; shapePath(o, s); });
+    o.globalAlpha = 1;
+    // Night lights, replayed in the SAME order: a lit window paints yellow, every later shape erases what it covers.
+    // So windows hidden behind a front house, a tower or a roof stay dark, exactly as in the day picture.
+    const [lights, l] = mk();
+    let k = 0;
+    shapes.forEach((s) => {
+      const isWin = s.isRect && s.fill === WIN_FILL;
+      const lit = isWin && ((k++ * 7919) % 10) < 6;
+      l.globalCompositeOperation = lit ? 'source-over' : 'destination-out';
+      l.fillStyle = lit ? '#ffd77a' : '#000'; l.strokeStyle = '#000';
+      shapePath(l, s);
+    });
+    l.globalCompositeOperation = 'source-over';
+    return (bgCache[cityId] = { img: img, lights: lights });
+  }
+
+  // ---------- small helpers ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, f) => { const A = hex(a), B = hex(b); f = clamp(f, 0, 1); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * f).toString(16).padStart(2, '0')).join(''); };
+  const fmt = (n) => Math.round(n).toLocaleString('en-US');
+  let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const STARS = Array.from({ length: 40 }, () => ({ x: rnd() * W, y: rnd() * 260, r: 0.8 + rnd() * 1.4, tw: rnd() * 6 }));
+  const DROPS = Array.from({ length: 170 }, () => ({ x0: rnd() * 1300, ph: rnd(), sp: 0.8 + rnd() * 0.4 }));
+  const CLOUDS = Array.from({ length: 6 }, (_, i) => ({ x0: i * 250 + rnd() * 120, y: 70 + rnd() * 130, s: 0.7 + rnd() * 0.7, sp: 6 + rnd() * 8 }));
+  const SKIN = '#c68e5c';
+  const STYLES = {
+    red: { frame: '#d62828', jacket: '#1f2a44', helmet: '#d62828', legs: '#2b2f3a', wheel: '#1f2328', spoke: '#6b7280', rider: true },
+    teal: { frame: '#0f766e', jacket: '#134e4a', helmet: '#f1f5f9', legs: '#1f2937', wheel: '#1f2328', spoke: '#6b7280', rider: true },
+    hivis: { frame: '#374151', jacket: '#e6d200', helmet: '#f8fafc', legs: '#1f2937', wheel: '#1f2328', spoke: '#6b7280', rider: true },
+    slate: { frame: '#94a3b8', jacket: '#64748b', helmet: '#e2e8f0', legs: '#475569', wheel: '#334155', spoke: '#94a3b8', rider: true },
+    bikes: { frame: '#d62828', wheel: '#e5e7eb', spoke: '#9ca3af', rider: false }
+  };
+  const STATUS_LABEL = { missing: 'no data', partial: 'partial data', glitch_known: 'feed glitch', glitch_suspected: 'suspected glitch' };
+
+  // ---------- state ----------
+  const st = { index: null, city: null, data: {}, days: 7, speed: 1, mode: 'out', style: 'bikes', t: null, playing: false, clock: 0 };
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (['1', '3', '7'].includes(hash.get('days'))) st.days = +hash.get('days');
+  if (['docked', 'out'].includes(hash.get('chart'))) st.mode = hash.get('chart');
+  if (STYLES[hash.get('bikes')]) st.style = hash.get('bikes');
+  function writeHash() { try { history.replaceState(null, '', '#city=' + st.city + '&days=' + st.days + '&chart=' + st.mode + '&bikes=' + st.style); } catch (e) { /* sandboxed viewers */ } }
+
+  // ---------- data ----------
+  async function loadJson(name) {
+    if (window.EMBEDDED_DATA && window.EMBEDDED_DATA[name]) return window.EMBEDDED_DATA[name];
+    const r = await fetch('data/' + name, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(name + ': HTTP ' + r.status);
+    return r.json();
+  }
+  async function loadCity(id) {
+    if (!st.data[id]) {
+      const d = await loadJson(id + '.json');
+      const firstIdx = {};
+      d.hours.forEach((h, i) => { if (!(h.date_local in firstIdx)) firstIdx[h.date_local] = i; });
+      d.firstIdx = firstIdx; d.dates = Object.keys(firstIdx);
+      d.dayInfo = Object.fromEntries(d.days.map((x) => [x.date_local, x]));
+      st.data[id] = d;
+    }
+    return st.data[id];
+  }
+  const cur = () => st.data[st.city];
+  function windowOf(d) {
+    const firstDate = d.dates[Math.max(0, d.dates.length - st.days)];
+    const start = d.firstIdx[firstDate];
+    return { start: start, tMax: d.hours.length - 1 - start };
+  }
+  function at(d, field, a) {
+    const i = clamp(Math.floor(a), 0, d.hours.length - 1), j = Math.min(d.hours.length - 1, i + 1), f = a - Math.floor(a);
+    const u = d.hours[i][field], v = d.hours[j][field];
+    if (u == null) return v; if (v == null) return u;
+    return u + (v - u) * f;
+  }
+
+  // ---------- UI wiring ----------
+  const cityBtn = $('cityBtn'), cityList = $('cityList');
+  function renderCityList() {
+    cityList.innerHTML = '';
+    st.index.cities.forEach((c) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option'); li.id = 'opt-' + c.city_id; li.dataset.id = c.city_id;
+      li.setAttribute('aria-selected', String(c.city_id === st.city));
+      const name = document.createElement('span'); name.textContent = c.city_name;
+      const small = document.createElement('small'); small.textContent = fmt(c.n_stations_city) + ' stations';
+      li.append(name, small);
+      li.addEventListener('click', () => { closeList(); selectCity(c.city_id); });
+      cityList.append(li);
+    });
+  }
+  let activeIdx = 0;
+  function setActive(i) {
+    const items = [...cityList.children]; if (!items.length) return;
+    activeIdx = (i + items.length) % items.length;
+    items.forEach((el, k) => el.classList.toggle('active', k === activeIdx));
+    cityList.setAttribute('aria-activedescendant', items[activeIdx].id);
+    items[activeIdx].scrollIntoView({ block: 'nearest' });
+  }
+  function openList() {
+    renderCityList(); cityList.hidden = false; cityBtn.setAttribute('aria-expanded', 'true');
+    setActive(st.index.cities.findIndex((c) => c.city_id === st.city)); cityList.focus();
+    $('cityHint').classList.remove('pulse');
+  }
+  function closeList(focusBtn) { cityList.hidden = true; cityBtn.setAttribute('aria-expanded', 'false'); if (focusBtn) cityBtn.focus(); }
+  cityBtn.addEventListener('click', () => (cityList.hidden ? openList() : closeList()));
+  cityList.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { setActive(activeIdx + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { setActive(activeIdx - 1); e.preventDefault(); }
+    else if (e.key === 'Enter' || e.key === ' ') { const id = cityList.children[activeIdx].dataset.id; closeList(true); selectCity(id); e.preventDefault(); }
+    else if (e.key === 'Escape' || e.key === 'Tab') closeList(e.key === 'Escape');
+  });
+  document.addEventListener('pointerdown', (e) => { if (!cityList.hidden && !cityList.contains(e.target) && !cityBtn.contains(e.target)) closeList(); });
+
+  async function selectCity(id) {
+    const keepT = st.t;
+    st.city = id; await loadCity(id);
+    const w = windowOf(cur());
+    st.t = keepT == null ? w.tMax : clamp(keepT, 0, w.tMax);
+    $('cityName').textContent = cur().city_name;
+    $('hintText').textContent = 'Change city · ' + st.index.cities.length + ' cities';
+    syncControls(); writeHash();
+  }
+  function syncControls() {
+    const w = windowOf(cur()), d = cur();
+    const s = $('scrub'); s.max = w.tMax; s.value = Math.floor(st.t + 1e-6);
+    const first = d.hours[w.start], last = d.hours[d.hours.length - 1];
+    $('windowLabel').textContent = 'Timeline · ' + first.weekday_local + ' ' + dmy(first.date_local) + ' 00:00 → ' + last.weekday_local + ' ' + dmy(last.date_local) + ' ' + last.hour_local.slice(11);
+    $('daysSel').value = String(st.days); $('speedSel').value = String(st.speed); $('styleSel').value = st.style;
+    $('modeDocked').setAttribute('aria-pressed', String(st.mode === 'docked')); $('modeOut').setAttribute('aria-pressed', String(st.mode === 'out'));
+    $('legendToday').textContent = st.mode === 'out' ? 'Out today' : 'Docked today';
+    $('playBtn').innerHTML = st.playing
+      ? '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="3" y="2" width="4" height="14" rx="1" fill="#fff"/><rect x="11" y="2" width="4" height="14" rx="1" fill="#fff"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 2 L16 9 L4 16 Z" fill="#fff"/></svg>';
+    $('playBtn').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
+  }
+  const dmy = (iso) => iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
+  $('playBtn').addEventListener('click', () => {
+    const w = windowOf(cur());
+    if (st.playing) st.playing = false; else { if (st.t >= w.tMax - 0.01) st.t = 0; st.playing = true; }
+    syncControls();
+  });
+  $('scrub').addEventListener('input', (e) => { st.t = +e.target.value; st.playing = false; syncControls(); });
+  $('daysSel').addEventListener('change', (e) => { st.days = +e.target.value; st.t = windowOf(cur()).tMax; st.playing = false; syncControls(); writeHash(); });
+  $('speedSel').addEventListener('change', (e) => { st.speed = +e.target.value; });
+  $('styleSel').addEventListener('change', (e) => { st.style = e.target.value; writeHash(); });
+  $('modeDocked').addEventListener('click', () => { st.mode = 'docked'; syncControls(); writeHash(); });
+  $('modeOut').addEventListener('click', () => { st.mode = 'out'; syncControls(); writeHash(); });
+  function stepDay(dir) { const w = windowOf(cur()); st.t = clamp(Math.round(st.t) + 24 * dir, 0, w.tMax); st.playing = false; syncControls(); }
+  $('prevDay').addEventListener('click', () => stepDay(-1));
+  $('nextDay').addEventListener('click', () => stepDay(1));
+
+  // ---------- scaling ----------
+  function fit() { const wrap = $('stageWrap'), s = wrap.clientWidth / W; $('stage').style.transform = 'scale(' + s + ')'; wrap.style.height = (H * s) + 'px'; }
+  window.addEventListener('resize', fit);
+
+  // ---------- drawing ----------
+  function ell(x, y, rx, ry, fill, alpha) { ctx.globalAlpha = alpha; ctx.fillStyle = fill; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+  function pill(x, y, w, h, fill, alpha) { ctx.globalAlpha = alpha; ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill(); ctx.globalAlpha = 1; }
+  function text(s, x, y, font, color, align) { ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); }
+
+  function drawBike(x, y, sc, style, spin, night, alpha) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0, 12, 34, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    [-17, 17].forEach((cx) => {
+      ctx.strokeStyle = style.wheel; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, 0, 11, 0, Math.PI * 2); ctx.stroke();
+      ctx.save(); ctx.translate(cx, 0); ctx.rotate(spin); ctx.strokeStyle = style.spoke; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.stroke(); ctx.restore();
+    });
+    ctx.strokeStyle = style.frame; ctx.lineWidth = 3;
+    ctx.stroke(new Path2D('M-17 0 L-3 -16 L12 -16 L17 0 M-3 -16 L0 0 L-17 0 M12 -16 L10 -24 M7 -25 L14 -25 M-7 -21 L1 -21'));
+    if (style.rider) {
+      ctx.strokeStyle = style.jacket; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(-2, -21); ctx.lineTo(4, -42); ctx.stroke();
+      ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(3, -37); ctx.lineTo(11, -25); ctx.stroke();
+      ctx.strokeStyle = style.legs; ctx.beginPath(); ctx.moveTo(-2, -21); ctx.lineTo(3, -10); ctx.lineTo(1, -2); ctx.stroke();
+      ctx.fillStyle = SKIN; ctx.beginPath(); ctx.arc(6, -50, 6.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = style.helmet; ctx.beginPath(); ctx.arc(6, -51, 7, Math.PI, 0); ctx.closePath(); ctx.fill();
+    }
+    if (night > 0.05) { ctx.globalAlpha = alpha * night; ctx.fillStyle = '#ffe680'; ctx.beginPath(); ctx.arc(20, -18, 3.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+
+  function draw() {
+    const d = cur(); if (!d) return;
+    const w = windowOf(d), t = clamp(st.t, 0, w.tMax), a = w.start + t, clock = st.clock;
+    const i0 = Math.floor(a + 1e-9), h0 = d.hours[i0];
+    const dayStart = d.firstIdx[h0.date_local], hod = a - dayStart, px = X0 + hod / 24 * XW;
+    const elev = at(d, 'sun_elevation_deg', a), cloud = at(d, 'cloud_cover_pct', a) ?? 0, temp = at(d, 'temperature_c', a);
+    const hNear = d.hours[Math.min(d.hours.length - 1, Math.round(a))];
+    const kind = hNear.precipitation_kind, precip = hNear.precipitation_mm || 0, snow = hNear.snowfall_cm || 0;
+    const wet = kind !== 'none', dayF = clamp((elev + 6) / 10, 0, 1), night = 1 - dayF;
+    const oc = Math.min(0.9, cloud / 100 * 0.7 + (wet ? 0.25 : 0)), tw = Math.max(0, 1 - Math.abs(elev + 1) / 5);
+
+    // sky
+    let top = mix('#0e1530', '#bde6fc', dayF), bottom = mix('#2a3560', '#f8fdff', dayF);
+    top = mix(top, mix('#1a2133', '#d3dae1', dayF), oc); bottom = mix(bottom, mix('#2c3446', '#f2f4f6', dayF), oc);
+    bottom = mix(bottom, '#f3a56b', tw * 0.7 * (1 - oc)); top = mix(top, '#7a6fa8', tw * 0.35 * (1 - oc));
+    const g = ctx.createLinearGradient(0, 0, 0, 590); g.addColorStop(0, top); g.addColorStop(1, bottom);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 590);
+    STARS.forEach((s) => ell(s.x, s.y, s.r, s.r, '#ffffff', night * (1 - oc) * (0.55 + 0.45 * Math.sin(clock * 1.5 + s.tw))));
+    const bx = clamp(px, 40, 1160);
+    if (elev > -4) { const sy = 380 - elev / 20 * 300; ell(bx, sy, 58, 58, '#fff3b0', (1 - oc * 0.8) * 0.45); ell(bx, sy, 34, 34, '#ffd23f', 1 - oc * 0.6); }
+    else { ell(bx, 110, 24, 24, '#f4f1de', 1 - oc * 0.7); ell(bx + 10, 104, 21, 21, top, 1); }
+    const cf = mix('#4a5468', wet ? '#b9c1ca' : '#ffffff', dayF);
+    CLOUDS.forEach((c) => {
+      const x = (((c.x0 + clock * c.sp) % 1500) + 1500) % 1500 - 150, o = 0.15 + 0.8 * cloud / 100;
+      ctx.save(); ctx.translate(x, c.y); ctx.scale(c.s, c.s); ell(0, 0, 70, 26, cf, o); ell(-34, -14, 36, 26, cf, o); ell(22, -22, 42, 32, cf, o); ctx.restore();
+    });
+
+    // skyline at 50%, street, night overlay, lights
+    const sk = skylineFor(st.city);
+    ctx.globalAlpha = 0.5; ctx.drawImage(sk.img, 0, 0, W, STREET); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#cfc9bd'; ctx.fillRect(0, 470, W, 18); ctx.fillStyle = '#4a4e57'; ctx.fillRect(0, 488, W, 102);
+    ctx.fillStyle = '#e6e1d3'; for (let x = 0; x < W; x += 50) ctx.fillRect(x, 538, 28, 3);
+    ctx.fillStyle = 'rgba(10,16,40,' + (night * 0.5) + ')'; ctx.fillRect(0, 0, W, 590);
+    if (night > 0.05) { ctx.globalAlpha = night * 0.85; ctx.drawImage(sk.lights, 0, 0, W, STREET); ctx.globalAlpha = 1; }
+
+    // chart
+    const out = st.mode === 'out';
+    let lo, hi;
+    if (out) { lo = 0; hi = Math.max(1, d.bikes_out_peak_recent_7d || 1); }
+    else { lo = Infinity; hi = -Infinity; for (let i = w.start; i < d.hours.length; i++) { lo = Math.min(lo, d.hours[i].docked_bikes); hi = Math.max(hi, d.hours[i].docked_bikes); } if (hi - lo < 1) hi = lo + 1; }
+    const field = out ? 'bikes_out_est' : 'docked_bikes';
+    const yOf = (v) => CH_BOT - (v - lo) / (hi - lo) * (CH_BOT - CH_TOP);
+    for (let h = 0; h < 24; h++) {                                      // grey bands for hours the pipeline filled in
+      const q = dayStart + h; if (q > a + 1e-9 || q >= d.hours.length) break;
+      const s = d.hours[q].data_status; if (s === 'ok') continue;
+      let h1 = h; while (h1 + 1 < 24 && dayStart + h1 + 1 <= a && dayStart + h1 + 1 < d.hours.length && d.hours[dayStart + h1 + 1].data_status === s) h1++;
+      const xa = X0 + Math.max(0, h - 0.5) / 24 * XW, xb = X0 + Math.min(24, h1 + 0.5) / 24 * XW;
+      ctx.fillStyle = 'rgba(107,114,128,0.28)'; ctx.fillRect(xa, CH_TOP - 2, Math.max(24, xb - xa), STREET - CH_TOP + 2);
+      text(STATUS_LABEL[s] || s, (xa + xb) / 2, CH_TOP + 10, '700 11px Inter, sans-serif', '#ffffff');
+      h = h1;
+    }
+    [lo, hi].forEach((v) => {
+      const y = yOf(v); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+      ctx.beginPath(); ctx.moveTo(X0, y); ctx.lineTo(X1, y); ctx.stroke(); ctx.setLineDash([]);
+      pill(X0 - 70, y - 10, 62, 20, '#1d2230', 0.7); text(fmt(v), X0 - 39, y + 0.5, '600 12px Inter, sans-serif', '#ffffff');
+    });
+    const di = d.dates.indexOf(h0.date_local);
+    if (di > 0) {
+      const p0 = d.firstIdx[d.dates[di - 1]];
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath();
+      for (let q = p0, k = 0; q <= p0 + 24 && q < d.hours.length; q += 0.5, k++) { const x = X0 + (q - p0) / 24 * XW, y = yOf(at(d, field, q)); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    const pts = [];
+    for (let q = dayStart; q < a; q += 0.25) pts.push([X0 + (q - dayStart) / 24 * XW, yOf(at(d, field, q))]);
+    const vNow = at(d, field, a); pts.push([px, yOf(vNow)]);
+    ctx.globalAlpha = 0.45; ctx.fillStyle = '#ff7a1a';
+    ctx.beginPath(); ctx.moveTo(X0, CH_BOT); pts.forEach((p) => ctx.lineTo(p[0], p[1])); ctx.lineTo(px, CH_BOT); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    const path = new Path2D(); pts.forEach((p, k) => (k ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1])));
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 8; ctx.stroke(path);
+    ctx.strokeStyle = '#ff7a1a'; ctx.lineWidth = 4; ctx.stroke(path);
+    const py = yOf(vNow);
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, 598); ctx.stroke();
+    ell(px, py, 9, 9, '#ffffff', 1); ell(px, py, 6, 6, '#ff7a1a', 1);
+    const docked = at(d, 'docked_bikes', a), outNow = at(d, 'bikes_out_est', a);
+    const lx = clamp(px, X0 + 85, 1115), ly = py < 230 ? py + 26 : py - 26;
+    pill(lx - 85, ly - 11, 170, 22, '#ffffff', 0.95); text(fmt(docked) + ' docked · ~' + fmt(outNow) + ' out', lx, ly + 0.5, '700 12px Inter, sans-serif', '#1d2230');
+
+    // bikes (count from the pipeline's share of the 7-day peak)
+    const share = clamp(at(d, 'bikes_out_share_of_peak', a) ?? 0, 0, 1), n = 9 * share, k = Math.ceil(n - 1e-6);
+    const style = STYLES[st.style], spin = st.playing ? clock * 7.3 : 0;
+    for (let i = 0; i < k; i++) {
+      const lane = i % 3, col = Math.floor(i / 3);
+      drawBike(px + 9 - 34 - col * 64 - lane * 10, 514 + lane * 26 + (st.playing ? Math.sin(clock * 9 + i) * 1.2 : 0), 0.88 + lane * 0.07,
+        style, spin, night, i < Math.floor(n) ? 1 : n - Math.floor(n));
+    }
+
+    // rain / snow (from the pipeline's precipitation_kind)
+    if (kind === 'rain') {
+      const m = Math.round(Math.min(170, 40 + precip * 110)); ctx.strokeStyle = 'rgba(207,227,255,0.75)'; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i < m; i++) { const r = DROPS[i], y = ((r.ph * 640 + clock * r.sp * 700) % 640) - 20, x = ((r.x0 - y * 0.18) % 1300 + 1300) % 1300 - 50; ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 16); }
+      ctx.stroke();
+    } else if (kind === 'snow') {
+      const m = Math.round(Math.min(150, 40 + snow * 160)); ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      for (let i = 0; i < m; i++) { const r = DROPS[i], y = ((r.ph * 640 + clock * r.sp * 55) % 640) - 20; ctx.beginPath(); ctx.arc(r.x0 - 50 + 12 * Math.sin(clock * 1.3 + r.ph * 30), y, 1.6 + r.ph * 2.2, 0, Math.PI * 2); ctx.fill(); }
+    }
+
+    // x axis
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 590, W, 50);
+    ctx.fillStyle = '#1d2230'; ctx.fillRect(X0, 589, XW, 2);
+    for (let h = 0; h <= 24; h++) {
+      const x = X0 + h / 24 * XW, major = h % 3 === 0;
+      ctx.fillStyle = major ? '#1d2230' : '#6b7280'; ctx.fillRect(x - (major ? 1 : 0.5), 591, major ? 2 : 1, major ? 12 : 6);
+      if (major) text((h < 10 ? '0' : '') + h + ':00', x, 615, '600 14px Inter, sans-serif', '#1d2230');
+    }
+    text('Hour of day (Zurich time)', X0 + XW / 2, 633, '400 10px Inter, sans-serif', '#5b6272');
+
+    // panels
+    $('dayLabel').textContent = h0.weekday_local + ' ' + dmy(h0.date_local);
+    $('timeLabel').textContent = h0.hour_local.slice(11, 13) + ':00';
+    $('dockedLabel').textContent = fmt(docked); $('outLabel').textContent = '~' + fmt(outNow);
+    $('prevDay').disabled = di <= d.dates.indexOf(d.hours[w.start].date_local); $('nextDay').disabled = di >= d.dates.length - 1;
+    $('tempLabel').textContent = (temp == null ? '–' : temp.toFixed(1)) + ' °C';
+    $('condLabel').textContent = kind === 'snow' ? 'Snow · ' + snow.toFixed(1) + ' cm/h' : kind === 'rain' ? 'Rain · ' + precip.toFixed(1) + ' mm/h' : cloud > 70 ? 'Overcast' : cloud > 30 ? 'Partly cloudy' : dayF > 0.5 ? 'Sunny' : 'Clear night';
+    const di2 = d.dayInfo[h0.date_local] || {};
+    $('cloudLabel').textContent = 'Cloud ' + Math.round(cloud) + '% · sun ' + (di2.sunrise_local || '–') + '–' + (di2.sunset_local || '–');
+    $('fcLabel').textContent = hNear.weather_is_forecast ? 'Forecast (latest weather pull)' : '';
+    setIcon(kind, cloud, dayF);
+    canvas.setAttribute('aria-label', d.city_name + ', ' + $('dayLabel').textContent + ' ' + $('timeLabel').textContent + ': ' + fmt(docked) + ' bikes docked, about ' + fmt(outNow) + ' out; ' + $('condLabel').textContent + ', ' + $('tempLabel').textContent);
+    if (!st.playing) $('scrub').value = Math.floor(t + 1e-6);
+  }
+  let lastIcon = '';
+  function setIcon(kind, cloud, dayF) {
+    const key = kind + (cloud > 70 ? 'c' : '') + (dayF > 0.5 ? 'd' : 'n'); if (key === lastIcon) return; lastIcon = key;
+    const cloudP = '<path d="M15 34 A 8 8 0 0 1 16 18 A 11 11 0 0 1 37 20 A 7 7 0 0 1 38 34 Z" fill="none" stroke="#5b6475" stroke-width="3" stroke-linejoin="round"/>';
+    let s;
+    if (kind === 'rain') s = cloudP + '<path d="M19 39 L16 46 M27 39 L24 46 M35 39 L32 46" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round"/>';
+    else if (kind === 'snow') s = cloudP + '<path d="M18 40 V46 M15 43 H21 M30 40 V46 M27 43 H33" stroke="#5b8bd6" stroke-width="2.5" stroke-linecap="round"/>';
+    else if (cloud > 70) s = cloudP;
+    else if (dayF > 0.5) s = '<circle cx="26" cy="26" r="10" fill="none" stroke="#e2a400" stroke-width="3"/><path d="M26 6 V11 M26 41 V46 M6 26 H11 M41 26 H46 M12 12 L15.5 15.5 M36.5 36.5 L40 40 M12 40 L15.5 36.5 M36.5 15.5 L40 12" stroke="#e2a400" stroke-width="3" stroke-linecap="round"/>';
+    else s = '<path d="M33 10 A 16 16 0 1 0 42 34 A 13 13 0 0 1 33 10 Z" fill="none" stroke="#4b5a8a" stroke-width="3" stroke-linejoin="round"/>';
+    $('wxIcon').innerHTML = s;
+  }
+
+  // ---------- loop ----------
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; st.clock += dt;
+    if (st.playing && cur()) {
+      const w = windowOf(cur()); st.t += dt / st.speed;
+      if (st.t >= w.tMax) { st.t = w.tMax; st.playing = false; syncControls(); }
+      $('scrub').value = Math.floor(st.t + 1e-6);
+    }
+    draw(); requestAnimationFrame(loop);
+  }
+
+  // ---------- start ----------
+  (async () => {
+    fit();
+    try {
+      await document.fonts.ready;
+      st.index = await loadJson('cities.json');
+      const wanted = hash.get('city'), ids = st.index.cities.map((c) => c.city_id);
+      await selectCity(ids.includes(wanted) ? wanted : (ids.includes('zurich') ? 'zurich' : ids[0]));
+      $('foot').textContent = st.index.attribution + ' Data window ' + st.index.first_hour_local.replace('T', ' ') + ' to ' + st.index.last_hour_local.replace('T', ' ') +
+        ' (Zurich time), exported ' + st.index.generated_at_utc + ' from ' + st.index.source_table + '. Bikes out is an estimate: the most bikes docked within ±12 h minus bikes docked now; 9 bikes on the street = the city\'s busiest hour of the week. Grey bands: hours filled in by the pipeline (missing data or feed glitch).';
+      $('loading').remove();
+      let seen = false; try { seen = !!sessionStorage.getItem('cityHintSeen'); sessionStorage.setItem('cityHintSeen', '1'); } catch (e) { /* storage unavailable */ }
+      if (!seen) $('cityHint').classList.add('pulse');
+      requestAnimationFrame(loop);
+    } catch (e) {
+      $('loading').textContent = 'Could not load data/cities.json (' + e.message + '). Serve this folder over HTTP, e.g. "python -m http.server" in visualizations/daily-animation.';
+    }
+  })();
+})();
+</script>
+</body>
+</html>
