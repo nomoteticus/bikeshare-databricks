@@ -16,6 +16,8 @@ resources:
           default: exports
         - name: days
           default: "7"
+        - name: end_date
+          default: ""                                # yyyy-MM-dd, local date; empty = up to the latest hour (daily run)
       tasks:
         - task_key: export_daily_animation
           notebook_task:
