@@ -65,6 +65,7 @@
   .seg button { border: none; padding: 0 12px; font: inherit; font-size: 14px; cursor: pointer; background: #fff; color: var(--ink); }
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .foot a { color: #2f5d8a; text-decoration: underline; }
   .foot { margin: 0; padding: 8px 18px 12px; font-size: 11.5px; line-height: 1.5; color: #5b6272; background: #fff; border-radius: 0 0 14px 14px; }
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--muted); }
 </style>
@@ -556,6 +557,37 @@
   function writeHash() { try { history.replaceState(null, '', '#city=' + st.city + '&days=' + st.days + '&chart=' + st.mode + '&bikes=' + st.style); } catch (e) { /* sandboxed viewers */ } }
 
   // ---------- data ----------
+  // Sources with links (required by the Open-Meteo CC BY 4.0 terms; SFOE asks for the source).
+  // Taken from cities.json when the export provides them, else these defaults.
+  const DEFAULT_SOURCES = [
+    { kind: 'bikes', name: 'sharedmobility.ch', url: 'https://sharedmobility.ch', publisher: 'Swiss Federal Office of Energy',
+      dataset_url: 'https://opendata.swiss/en/dataset/standorte-und-verfugbarkeit-von-shared-mobility-angeboten' },
+    { kind: 'weather', name: 'Open-Meteo.com', url: 'https://open-meteo.com/', license: 'CC BY 4.0',
+      license_url: 'https://creativecommons.org/licenses/by/4.0/', note: 'MeteoSwiss ICON models; aggregated by city and hour' },
+  ];
+  function renderFooter(index, rest) {
+    const foot = $('foot');
+    foot.textContent = '';
+    const link = (href, label) => { const a = document.createElement('a'); a.href = href; a.textContent = label; a.target = '_blank'; a.rel = 'noopener'; return a; };
+    const add = (x) => foot.append(typeof x === 'string' ? document.createTextNode(x) : x);
+    const sources = (index.sources && index.sources.length) ? index.sources : DEFAULT_SOURCES;
+    const bikes = sources.find((s) => s.kind === 'bikes');
+    const weather = sources.find((s) => s.kind === 'weather');
+    if (bikes) {
+      add('Bike data: '); add(link(bikes.url, bikes.name));
+      if (bikes.publisher) add(', ' + bikes.publisher);
+      if (bikes.dataset_url) { add(' ('); add(link(bikes.dataset_url, 'dataset')); add(')'); }
+      add('. ');
+    }
+    if (weather) {
+      add('Weather data by '); add(link(weather.url, weather.name));
+      if (weather.license) { add(', '); add(weather.license_url ? link(weather.license_url, weather.license) : weather.license); }
+      if (weather.note) add(' (' + weather.note + ')');
+      add('.');
+    }
+    add(rest);
+  }
+
   async function loadJson(name) {
     if (window.EMBEDDED_DATA && window.EMBEDDED_DATA[name]) return window.EMBEDDED_DATA[name];
     const r = await fetch('data/' + name, { cache: 'no-cache' });
@@ -858,9 +890,9 @@
       st.index = await loadJson('cities.json');
       const wanted = hash.get('city'), ids = st.index.cities.map((c) => c.city_id);
       await selectCity(ids.includes(wanted) ? wanted : (ids.includes('zurich') ? 'zurich' : ids[0]));
-      $('foot').textContent = st.index.attribution + ' Data window ' + st.index.first_hour_local.replace('T', ' ') + ' to ' + st.index.last_hour_local.replace('T', ' ') +
+      renderFooter(st.index, ' Data window ' + st.index.first_hour_local.replace('T', ' ') + ' to ' + st.index.last_hour_local.replace('T', ' ') +
         ' (Zurich time), exported ' + st.index.generated_at_utc + ' from ' + st.index.source_table + '. Bikes out is an estimate: the most bikes docked within ±12 h minus bikes docked now; 9 bikes on the street = the city\'s busiest hour of the week. Stations with activity: share of stations whose bike count changed during the hour. Grey bands: hours filled in by the pipeline (missing data or feed glitch).' +
-        ((st.index.not_shown || []).length ? ' Not shown: ' + st.index.not_shown.map((c) => c.city_name + ' (' + (c.note || 'excluded') + ')').join('; ') + '.' : '');
+        ((st.index.not_shown || []).length ? ' Not shown: ' + st.index.not_shown.map((c) => c.city_name + ' (' + (c.note || 'excluded') + ')').join('; ') + '.' : ''));
       $('loading').remove();
       let seen = false; try { seen = !!sessionStorage.getItem('cityHintSeen'); sessionStorage.setItem('cityHintSeen', '1'); } catch (e) { /* storage unavailable */ }
       if (!seen) $('cityHint').classList.add('pulse');
