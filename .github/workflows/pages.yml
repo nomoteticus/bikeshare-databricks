@@ -1,0 +1,45 @@
+# Publishes the daily animation (visualizations/daily-animation/) to GitHub Pages.
+# Phase 1: the page and a fixed data snapshot are committed in the repo.
+# Phase 2 (planned): a schedule plus a step that downloads the latest export
+# from the Unity Catalog volume before the upload, so daily data stays out of Git.
+name: Publish daily animation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'visualizations/daily-animation/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:  # "Run workflow" button in the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a running deployment is not cancelled.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+      - name: Upload the site folder
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: visualizations/daily-animation
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
