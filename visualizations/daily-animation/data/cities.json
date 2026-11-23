@@ -1,0 +1,212 @@
+{
+ "generated_at_utc": "2026-11-23T00:00Z",
+ "source_table": "prod.bikeshare.gold_city_hour",
+ "window_days": 7,
+ "end_date": "2026-11-22",
+ "first_hour_local": "2026-11-16T00:00",
+ "last_hour_local": "2026-11-22T23:00",
+ "attribution": "Bike data: sharedmobility.ch, Swiss Federal Office of Energy (https://opendata.swiss/en/dataset/standorte-und-verfugbarkeit-von-shared-mobility-angeboten). Weather data by Open-Meteo.com (https://open-meteo.com/), CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/), MeteoSwiss ICON models; aggregated by city and hour.",
+ "sources": [
+  {
+   "kind": "bikes",
+   "name": "sharedmobility.ch",
+   "url": "https://sharedmobility.ch",
+   "publisher": "Swiss Federal Office of Energy",
+   "dataset_url": "https://opendata.swiss/en/dataset/standorte-und-verfugbarkeit-von-shared-mobility-angeboten"
+  },
+  {
+   "kind": "weather",
+   "name": "Open-Meteo.com",
+   "url": "https://open-meteo.com/",
+   "license": "CC BY 4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "note": "MeteoSwiss ICON models; aggregated by city and hour"
+  }
+ ],
+ "fields": {
+  "hour_local": "Hour start, Europe/Zurich wall-clock time, yyyy-MM-ddTHH:mm",
+  "date_local": "Local date of the hour",
+  "hour_of_day": "Local hour of day, 0 to 23",
+  "weekday_local": "Local weekday, Mon to Sun",
+  "is_weekend": "Saturday or Sunday (local); public holidays not included",
+  "data_status": "ok, missing, partial, glitch_known or glitch_suspected; rules in the header of city.sql",
+  "is_imputed": "TRUE when docked_bikes is interpolated because data_status is not ok",
+  "docked_bikes_raw": "Sum of bikes docked at the hour start (first snapshot) over reporting stations; NULL if missing",
+  "docked_bikes": "Cleaned docked bikes: raw value when ok, else linear interpolation between neighboring ok hours",
+  "bikes_out_est": "Estimated bikes out of docks = fleet_baseline_bikes - docked_bikes; uses future hours, display only, not a forecasting feature",
+  "bikes_out_provisional": "TRUE for the last 12 hours of data: baseline may still change as new hours arrive",
+  "bikes_out_share_of_peak": "bikes_out_est / bikes_out_peak_recent_7d, 0 to 1; the animation draws 9 bikes at 1",
+  "n_stations_active": "Stations whose bike count changed during the hour (count at the next hour start differs from this hour start)",
+  "share_stations_active": "Share of stations with activity during the hour, 0 to 1: raw value when valid, else linear interpolation; NULL at the edges",
+  "is_activity_imputed": "TRUE when share_stations_active is interpolated (share_stations_active_raw is NULL)",
+  "temperature_c": "Air temperature at 2 m at the hour start, deg C (city weather cell)",
+  "precipitation_mm": "Total precipitation during the hour, mm (rain + snow water equivalent)",
+  "snowfall_cm": "Snowfall during the hour, cm",
+  "precipitation_kind": "snow if snowfall_cm > 0, rain if precipitation_mm >= 0.1, else none",
+  "cloud_cover_pct": "Cloud cover at the hour start, percent",
+  "weather_code": "WMO weather code at the hour start",
+  "weather_is_forecast": "TRUE when the weather values are still a forecast (after the latest weather pull)",
+  "sun_elevation_deg": "Sun elevation above the horizon at the hour start, degrees (negative = below)",
+  "light_phase": "day (elevation > -0.833), twilight (to -6) or night, at the hour start"
+ },
+ "cities": [
+  {
+   "city_id": "bern",
+   "city_name": "Bern",
+   "n_stations_city": 330,
+   "file": "bern.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "velospot",
+     "operator_name": "Velospot",
+     "n_stations": 330
+    }
+   ]
+  },
+  {
+   "city_id": "biel",
+   "city_name": "Biel/Bienne",
+   "n_stations_city": 59,
+   "file": "biel.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "velospot",
+     "operator_name": "Velospot",
+     "n_stations": 59
+    }
+   ]
+  },
+  {
+   "city_id": "chur",
+   "city_name": "Chur",
+   "n_stations_city": 48,
+   "file": "chur.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "nextbike_ms",
+     "operator_name": "invia BikeShare",
+     "n_stations": 48
+    }
+   ]
+  },
+  {
+   "city_id": "fribourg",
+   "city_name": "Fribourg",
+   "n_stations_city": 62,
+   "file": "fribourg.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "velospot",
+     "operator_name": "Velospot",
+     "n_stations": 62
+    }
+   ]
+  },
+  {
+   "city_id": "geneve",
+   "city_name": "Genève",
+   "n_stations_city": 607,
+   "file": "geneve.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "donkey_ge",
+     "operator_name": "Donkey Republic",
+     "n_stations": 607
+    }
+   ]
+  },
+  {
+   "city_id": "lugano",
+   "city_name": "Lugano",
+   "n_stations_city": 66,
+   "file": "lugano.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "velospot",
+     "operator_name": "Velospot",
+     "n_stations": 66
+    }
+   ]
+  },
+  {
+   "city_id": "luzern",
+   "city_name": "Luzern",
+   "n_stations_city": 197,
+   "file": "luzern.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "nextbike_ch",
+     "operator_name": "nextbike",
+     "n_stations": 197
+    }
+   ]
+  },
+  {
+   "city_id": "neuchatel",
+   "city_name": "Neuchâtel",
+   "n_stations_city": 52,
+   "file": "neuchatel.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "donkey_neuchatel",
+     "operator_name": "Donkey Republic",
+     "n_stations": 52
+    }
+   ]
+  },
+  {
+   "city_id": "yverdon",
+   "city_name": "Yverdon-les-Bains",
+   "n_stations_city": 80,
+   "file": "yverdon.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "donkey_yverdon-les-bains",
+     "operator_name": "Donkey Republic",
+     "n_stations": 80
+    }
+   ]
+  },
+  {
+   "city_id": "zurich",
+   "city_name": "Zürich",
+   "n_stations_city": 258,
+   "file": "zurich.json",
+   "n_hours": 168,
+   "providers": [
+    {
+     "provider_id": "velospot",
+     "operator_name": "Velospot",
+     "n_stations": 258
+    }
+   ]
+  }
+ ],
+ "not_shown_reason": "station data not fresh enough: stations report too rarely to show an hourly pattern",
+ "not_shown": [
+  {
+   "city_id": "basel",
+   "city_name": "Basel",
+   "note": "Stations report rarely (median 15.7 h since last report, counts change in 8% of station-hours), so the daily pattern is not visible"
+  },
+  {
+   "city_id": "locarno",
+   "city_name": "Locarno",
+   "note": "Stations report rarely (median 16.7 h since last report, counts change in 8% of station-hours), so the daily pattern is not visible"
+  },
+  {
+   "city_id": "sion",
+   "city_name": "Sion",
+   "note": "Stations report rarely (median 9.8 h since last report, counts change in 11% of station-hours), so the daily pattern is barely visible"
+  }
+ ]
+}
