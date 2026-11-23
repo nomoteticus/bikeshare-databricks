@@ -48,7 +48,7 @@ The feed is real-time only: there is no history to download, so every missed pul
 | `bikeshare_pull_reference` | daily 04:15 | Downloads `station_information`, `providers`, `system_regions` |
 | `bikeshare_pull_weather` | daily 05:20 | One Open-Meteo request for all weather grid cells, window from 2 days before to 2 days after the run date; one JSON Lines file per run |
 | `bikeshare_refresh` | hourly at :10 | Runs the pipeline `bikeshare_stations` (all tables below) |
-| `bikeshare_export_daily_animation` | daily 06:40 | Writes the JSON files for the animation page: the last 7 local days, or the 7 days up to a fixed `end_date` for a reproducible snapshot |
+| `bikeshare_export_daily_animation` | daily 12:30 | Writes the JSON files for the animation page: the 7 full local days up to and including the day before the export (a run on Tue 24 Nov gives Tue 17 00:00 to Mon 23 23:00), or the 7 days up to a fixed `end_date` for a reproducible snapshot. It fails without writing when the tables do not yet reach 23:00 of the last day |
 
 Details worth knowing:
 

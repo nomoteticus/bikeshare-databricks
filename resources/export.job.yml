@@ -5,7 +5,7 @@ resources:
       max_concurrent_runs: 1
       timeout_seconds: 600
       schedule:
-        quartz_cron_expression: "0 40 6 * * ?"     # daily at 06:40, after the 05:20 weather pull and the 06:10 pipeline refresh
+        quartz_cron_expression: "0 30 12 * * ?"    # daily at 12:30, after the 12:10 pipeline refresh; by then "bikes out" for all of yesterday is final (its +/-12 h baseline needs data up to 11:00)
         timezone_id: Europe/Zurich
       parameters:
         - name: catalog
@@ -17,7 +17,7 @@ resources:
         - name: days
           default: "7"
         - name: end_date
-          default: ""                                # yyyy-MM-dd, local date; empty = up to the latest hour (daily run)
+          default: ""                                # yyyy-MM-dd, local date; empty = the day before the export (daily run)
       tasks:
         - task_key: export_daily_animation
           notebook_task:
