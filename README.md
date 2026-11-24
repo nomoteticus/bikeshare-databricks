@@ -4,6 +4,8 @@ Visualizing and forecasting shared-bike availability at Swiss stations from time
 
 This is a learning project for Databricks data engineering: Lakeflow Jobs, Spark Declarative Pipelines, the medallion architecture, Unity Catalog, Git folders and Declarative Automation Bundles (formerly Databricks Asset Bundles). It runs on Databricks Free Edition (serverless).
 
+Built in collaboration with Claude Code as a pair programmer for the animation page and for parts of the code for the pipeline. I authored the architecture, the data modeling decisions, the metric definitions, testing and deployment.
+
 How the data flows from the feeds to the tables, and how the metrics on the animation page are computed: **[docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md)**.
 
 ## Goal
