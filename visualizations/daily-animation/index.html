@@ -92,7 +92,7 @@
 <main class="page">
   <div class="intro">
     <h1>Swiss bike-share, hour by hour</h1>
-    <p>Docked bikes, bikes out, active stations and weather over the last days, replayed.</p>
+    <p>Docked bikes, bikes out, active stations and weather over the last days, replayed. <span id="dataThrough"></span></p>
   </div>
   <div id="stageWrap">
     <div id="stage">
@@ -628,6 +628,16 @@
     line('How it is built', 'the Databricks pipeline (ingestion, bronze/silver/gold tables) and how each metric is computed are described in ', link(DOC_URL, 'docs/DATA_PIPELINE.md'), '.');
   }
 
+  // Intro line: the last full day in the data, e.g. "Data through Mon, 23 Nov 2026."
+  function renderDataThrough(index) {
+    const iso = index.end_date || (index.last_hour_local || '').slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return;
+    const day = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    $('dataThrough').textContent = 'Data through '
+      + day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) + '.';
+  }
+
   async function loadJson(name) {
     if (window.EMBEDDED_DATA && window.EMBEDDED_DATA[name]) return window.EMBEDDED_DATA[name];
     const r = await fetch('data/' + name, { cache: 'no-cache' });
@@ -935,6 +945,7 @@
       const wanted = hash.get('city'), ids = st.index.cities.map((c) => c.city_id);
       await selectCity(ids.includes(wanted) ? wanted : (ids.includes('zurich') ? 'zurich' : ids[0]));
       renderFooter(st.index);
+      renderDataThrough(st.index);
       $('loading').remove();
       let seen = false; try { seen = !!sessionStorage.getItem('cityHintSeen'); sessionStorage.setItem('cityHintSeen', '1'); } catch (e) { /* storage unavailable */ }
       if (!seen) $('cityHint').classList.add('pulse');
