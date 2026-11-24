@@ -626,6 +626,18 @@
     const ns = index.not_shown || [];
     if (ns.length) line('Not shown', ns.map((c) => c.city_name).join(', ') + ' (' + (index.not_shown_reason || NOT_SHOWN_REASON) + ').');
     line('How it is built', 'the Databricks pipeline (ingestion, bronze/silver/gold tables) and how each metric is computed are described in ', link(DOC_URL, 'docs/DATA_PIPELINE.md'), '.');
+    // Update schedule and time of the last export, in Zurich time (CET in winter, CEST in summer)
+    const gen = new Date(index.generated_at_utc);
+    let lastUpdate = '';
+    if (!isNaN(gen)) {
+      const fmt = (o) => gen.toLocaleString('en-GB', Object.assign({ timeZone: 'Europe/Zurich' }, o));
+      const tz = (new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Zurich', timeZoneName: 'short' })
+        .formatToParts(gen).find((x) => x.type === 'timeZoneName') || {}).value;
+      lastUpdate = ' Last update: ' + fmt({ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ', '
+        + fmt({ hour: '2-digit', minute: '2-digit', hour12: false }) + ' ' + (/^CES?T$/.test(tz) ? tz : 'Zurich time') + '.';
+    }
+    line('Updates', 'every day at about 13:20 CET (14:20 CEST in summer), with the ' + (index.window_days || 7)
+         + ' full days up to yesterday.' + lastUpdate);
   }
 
   // Intro line: the last full day in the data, e.g. "Data through Mon, 23 Nov 2026."
