@@ -1,7 +1,16 @@
 # Publishes the daily animation (visualizations/daily-animation/) to GitHub Pages.
-# Phase 1: the page and a fixed data snapshot are committed in the repo.
-# Phase 2 (planned): a schedule plus a step that downloads the latest export
-# from the Unity Catalog volume before the upload, so daily data stays out of Git.
+#
+# Data: before the upload, the newest export is downloaded from the Unity Catalog volume
+# (.github/scripts/fetch_daily_animation.py), so the daily data never enters Git history.
+# The JSON files committed under visualizations/daily-animation/data/ are a fallback snapshot:
+# they are published only while the DATABRICKS_TOKEN secret is not set, or on a manual run
+# with data = snapshot.
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   DATABRICKS_HOST   workspace URL (https://dbc-....cloud.databricks.com)
+#   DATABRICKS_TOKEN  token that can read /Volumes/prod/bikeshare/exports
+#
+# If the download fails or the export is stale, the run fails and the last deployment stays online.
 name: Publish daily animation
 
 on:
@@ -10,7 +19,19 @@ on:
     paths:
       - 'visualizations/daily-animation/**'
       - '.github/workflows/pages.yml'
+      - '.github/scripts/fetch_daily_animation.py'
+  schedule:
+    # Daily at 12:20 UTC = 13:20 in winter, 14:20 in summer (Zurich time); cron is always UTC.
+    # The export job writes the files at 12:30 Zurich time. GitHub may start scheduled runs late,
+    # and pauses schedules in public repos after 60 days without repository activity.
+    - cron: '20 12 * * *'
   workflow_dispatch:  # "Run workflow" button in the Actions tab
+    inputs:
+      data:
+        description: 'Data to publish'
+        type: choice
+        options: [latest, snapshot]
+        default: latest
 
 permissions:
   contents: read
@@ -27,6 +48,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Download the latest export from Databricks
+        if: ${{ inputs.data != 'snapshot' }}
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          # The scheduled run needs data that ends yesterday. Other runs (a push in the morning,
+          # before the 12:30 export) also accept the export of the day before.
+          MAX_AGE_DAYS: ${{ github.event_name == 'schedule' && '1' || '2' }}
+        run: >
+          python3 .github/scripts/fetch_daily_animation.py
+          --out visualizations/daily-animation/data
+          --max-age-days "$MAX_AGE_DAYS"
       - uses: actions/configure-pages@v5
       - name: Upload the site folder
         uses: actions/upload-pages-artifact@v4

@@ -92,7 +92,7 @@
 <main class="page">
   <div class="intro">
     <h1>Swiss bike-share, hour by hour</h1>
-    <p>Docked bikes, bikes out, active stations and weather over the last days, replayed.</p>
+    <p>Docked bikes, bikes out, active stations and weather over the last days, replayed. <span id="dataThrough"></span></p>
   </div>
   <div id="stageWrap">
     <div id="stage">
@@ -626,6 +626,28 @@
     const ns = index.not_shown || [];
     if (ns.length) line('Not shown', ns.map((c) => c.city_name).join(', ') + ' (' + (index.not_shown_reason || NOT_SHOWN_REASON) + ').');
     line('How it is built', 'the Databricks pipeline (ingestion, bronze/silver/gold tables) and how each metric is computed are described in ', link(DOC_URL, 'docs/DATA_PIPELINE.md'), '.');
+    // Update schedule and time of the last export, in Zurich time (CET in winter, CEST in summer)
+    const gen = new Date(index.generated_at_utc);
+    let lastUpdate = '';
+    if (!isNaN(gen)) {
+      const fmt = (o) => gen.toLocaleString('en-GB', Object.assign({ timeZone: 'Europe/Zurich' }, o));
+      const tz = (new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Zurich', timeZoneName: 'short' })
+        .formatToParts(gen).find((x) => x.type === 'timeZoneName') || {}).value;
+      lastUpdate = ' Last update: ' + fmt({ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ', '
+        + fmt({ hour: '2-digit', minute: '2-digit', hour12: false }) + ' ' + (/^CES?T$/.test(tz) ? tz : 'Zurich time') + '.';
+    }
+    line('Updates', 'every day at about 13:20 CET (14:20 CEST in summer), with the ' + (index.window_days || 7)
+         + ' full days up to yesterday.' + lastUpdate);
+  }
+
+  // Intro line: the last full day in the data, e.g. "Data through Mon, 23 Nov 2026."
+  function renderDataThrough(index) {
+    const iso = index.end_date || (index.last_hour_local || '').slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return;
+    const day = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    $('dataThrough').textContent = 'Data through '
+      + day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) + '.';
   }
 
   async function loadJson(name) {
@@ -935,6 +957,7 @@
       const wanted = hash.get('city'), ids = st.index.cities.map((c) => c.city_id);
       await selectCity(ids.includes(wanted) ? wanted : (ids.includes('zurich') ? 'zurich' : ids[0]));
       renderFooter(st.index);
+      renderDataThrough(st.index);
       $('loading').remove();
       let seen = false; try { seen = !!sessionStorage.getItem('cityHintSeen'); sessionStorage.setItem('cityHintSeen', '1'); } catch (e) { /* storage unavailable */ }
       if (!seen) $('cityHint').classList.add('pulse');
