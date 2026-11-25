@@ -18,6 +18,16 @@ How the data flows from the feeds to the tables, and how the metrics on the anim
    - seasonality (month, holidays, school vacations)
    - weather (temperature, precipitation, wind)
 
+## Live visualization
+
+**[Swiss bike-share, hour by hour](https://nomoteticus.github.io/bikeshare-databricks/)** (live page, updated every day)
+
+[![Animation page: cartoon Zurich skyline on a rainy evening with the hourly bikes-out chart](visualizations/daily-animation/preview.png)](https://nomoteticus.github.io/bikeshare-databricks/)
+
+The page replays the last 7 full days in 10 Swiss cities, hour by hour: bikes in docks, estimated bikes out and the share of stations with activity, drawn over the city's skyline with its weather and daylight. You can change the city, the look-back (today, 3 or 7 days), the speed, the bike color, and the metric (active stations, bikes docked or bikes out).
+
+It is a static page on GitHub Pages that only plots: all metrics come from the `gold_city_hour` table. A daily export job writes them as JSON to a Unity Catalog volume, and a scheduled GitHub Actions workflow downloads the newest export, checks that it is fresh and publishes the page at about 13:20 CET (14:20 CEST in summer). How the metrics are computed: [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md).
+
 ## Data sources
 
 | Source | What | Format |
@@ -82,6 +92,7 @@ bikeshare-databricks/
 - [x] Gold table: station × hour availability with point-in-time station attributes and weather
 - [x] Gold table: city × hour for 13 Swiss cities (docked bikes, data-quality status, estimated bikes out, activity, weather, sun)
 - [x] Daily export and a static animation page (`visualizations/daily-animation`)
+- [x] Animation page live on GitHub Pages, republished daily by a GitHub Actions workflow that pulls the newest export
 - [ ] Gold features: calendar (holidays, school vacations) and lag features
 - [ ] Forecasting model and evaluation
 - [ ] CI: `databricks bundle validate` on every pull request (GitHub Actions)
